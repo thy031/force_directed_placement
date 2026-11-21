@@ -1,0 +1,456 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+/* EDIT font paths for your machine */
+@font-face{font-family:P;font-weight:400;src:url(file:///usr/share/fonts/truetype/google-fonts/Poppins-Regular.ttf)}
+@font-face{font-family:P;font-weight:500;src:url(file:///usr/share/fonts/truetype/google-fonts/Poppins-Medium.ttf)}
+@font-face{font-family:P;font-weight:700;src:url(file:///usr/share/fonts/truetype/google-fonts/Poppins-Bold.ttf)}
+@font-face{font-family:M;font-weight:700;src:url(file:///usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf)}
+html,body{margin:0;background:#fff;overflow:hidden}
+svg{display:block}
+</style></head><body>
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"></svg>
+<script>
+/* ---------- helpers ---------- */
+const W=1920,H=1080,DUR=176.2333;
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const eo=t=>1-Math.pow(1-clamp(t),3);
+const eob=t=>{t=clamp(t);const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2)};
+const ez=t=>{t=clamp(t);return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2};
+const pp=x=>1-Math.abs(1-(((x%2)+2)%2));
+const R=i=>{const x=Math.sin(i*127.1+311.7)*43758.5453;return x-Math.floor(x)};
+const f1=n=>Math.round(n*10)/10;
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const INK='#1F2A5A',SOFT='#6B7AA8';
+const ctx=document.createElement('canvas').getContext('2d');
+function meas(s,size,w=500,f='P'){ctx.font=`${w} ${size}px ${f}`;return ctx.measureText(s.replace(/\*\*/g,'')).width}
+const wrapCache={};
+function wrap(s,size,w,maxW){
+  const key=s+size+w+maxW; if(wrapCache[key])return wrapCache[key];
+  const words=s.split(' '),lines=[];let cur='';
+  for(const wd of words){const tst=cur?cur+' '+wd:wd; if(meas(tst,size,w)>maxW&&cur){lines.push(cur);cur=wd}else cur=tst}
+  if(cur)lines.push(cur); return wrapCache[key]=lines;
+}
+function T(s,x,y,size,fill,o={}){
+  const weight=o.w||500,anchor=o.a||'start',font=o.f||'P';
+  const parts=s.split('**');let inner='';
+  parts.forEach((p,i)=>{if(!p)return;const b=i%2===1;inner+=`<tspan${b?` font-weight="700" fill="${o.acc||'#FF5C93'}"`:''}>${esc(p)}</tspan>`});
+  return `<text x="${f1(x)}" y="${f1(y)}" font-family="${font}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}" ${o.x||''}>${inner}</text>`;
+}
+function TW(s,x,y,maxW,size,fill,o={}){const L=wrap(s,size,o.w||500,maxW),lh=o.lh||size*1.35;return L.map((l,i)=>T(l,x,y+i*lh,size,fill,o)).join('')}
+function TC(s,x,cy,maxW,size,fill,o={}){ // vertically centred wrapped text
+  const L=wrap(s,size,o.w||500,maxW),lh=o.lh||size*1.3;
+  const y0=cy-(L.length-1)*lh/2+size*0.35;
+  return L.map((l,i)=>T(l,x,y0+i*lh,size,fill,o)).join('');
+}
+function G(t,t0,inner,cx,cy,o={}){
+  if(t<t0)return '';
+  const u=(t-t0)/(o.d||.45),k=eob(u),a=clamp((t-t0)/.18);
+  return `<g opacity="${f1(a*100)/100}" transform="translate(${f1(cx)} ${f1(cy)}) scale(${k.toFixed(3)}) translate(${f1(-cx)} ${f1(-cy)})">${inner}</g>`;
+}
+function rect(x,y,w,h,r,fill,ex=''){return `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h)}" rx="${r}" fill="${fill}" ${ex}/>`}
+function circ(x,y,r,fill,ex=''){return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="${fill}" ${ex}/>`}
+function starP(cx,cy,r,rot=0){let p='';for(let i=0;i<10;i++){const a=rot+i*Math.PI/5-Math.PI/2,rr=i%2?r*.45:r;p+=(i?'L':'M')+f1(cx+Math.cos(a)*rr)+' '+f1(cy+Math.sin(a)*rr)}return p+'Z'}
+function card(x,y,w,h,fill='#fff',r=36,ex=''){return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" filter="url(#sh)" ${ex}/>`}
+function arrow(x1,y1,x2,y2,col,w=6,gap=0){
+  const dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
+  const ex=x2-ux*gap,ey=y2-uy*gap,sx=x1+ux*gap,sy=y1+uy*gap;
+  const hx=ex-ux*18,hy=ey-uy*18;
+  return `<line x1="${f1(sx)}" y1="${f1(sy)}" x2="${f1(hx)}" y2="${f1(hy)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`+
+   `<polygon points="${f1(ex)},${f1(ey)} ${f1(hx-uy*11)},${f1(hy+ux*11)} ${f1(hx+uy*11)},${f1(hy-ux*11)}" fill="${col}"/>`;
+}
+const PAST=['#FFE9A8','#C9F2DC','#D3E1FF','#FFD3E3'],DARK=['#FFB300','#2BBF7E','#4C7DFF','#FF5C93'];
+function bulletCards(t,items,times,x,y,w,h,gap,size){
+  let s='';
+  items.forEach((it,i)=>{
+    const yy=y+i*(h+gap),cy=yy+h/2;
+    const inner=rect(x,yy,w,h,34,PAST[i%4],`stroke="#fff" stroke-width="5"`)+circ(x+66,cy,38,DARK[i%4])+T(String(i+1),x+66,cy+16,46,'#fff',{w:700,a:'middle'})+TC(it,x+130,cy,w-160,size,INK,{acc:DARK[i%4]==='#FFB300'?'#E07B00':DARK[i%4]});
+    s+=G(t,times[i],inner,x+w/2,cy);
+  });
+  return s;
+}
+
+/* ---------- schedule (seconds) ---------- */
+const SEC=[
+ {s:0,e:16.47,title:'',acc:'#FF5C93',phrase:"Hi! I'm Pip!",mood:'wave'},
+ {s:16.47,e:34.03,title:'The big idea',acc:'#4C7DFF',phrase:"Let's learn!",mood:'smile'},
+ {s:34.03,e:51.63,title:'Pseudocode',acc:'#9B5DFF',phrase:"Easy as a recipe!",mood:'smile'},
+ {s:51.63,e:55.27,title:'Algorithm sketch',acc:'#FF7A3D',phrase:"We start at 52!",mood:'o'},
+ {s:55.27,e:60.27,title:'Algorithm sketch: try it!',acc:'#00B8A9',phrase:"Read each line!",mood:'smile'},
+ {s:60.27,e:70.7,title:'Start from HPWL fifty-two',acc:'#4C7DFF',phrase:"Long wires...",mood:'worry'},
+ {s:70.7,e:79.93,title:'Neighbors pull cells inward',acc:'#FF5C93',phrase:"Pull, pull, pull!",mood:'o'},
+ {s:79.93,e:88.17,title:'After force: about 18.7',acc:'#2BBF7E',phrase:"Much better!",mood:'smile'},
+ {s:88.17,e:96.97,title:'Force vs golden compact',acc:'#FFB300',phrase:"Almost golden!",mood:'smile'},
+ {s:96.97,e:106.33,title:'Alpha trades speed vs collapse',acc:'#9B5DFF',phrase:"Not too big!",mood:'o'},
+ {s:106.33,e:124.57,title:'Browser lab track',acc:'#00B8A9',phrase:"Let's explore!",mood:'smile'},
+ {s:124.57,e:143.7,title:'Implement track',acc:'#FF7A3D',phrase:"Time to code!",mood:'smile'},
+ {s:143.7,e:161.37,title:'Pitfalls',acc:'#FF5C93',phrase:"Watch out!",mood:'worry'},
+ {s:161.37,e:176.24,title:'Your turn!',acc:'#4C7DFF',phrase:"You can do it!",mood:'cheer'}
+];
+const SCH={
+ s1:[16.9,23.2,25.45,29.7], s2:[34.4,39.55,41.9,46.3],
+ s4:[55.5,56.1,56.7,57.3,57.9,58.5,59.1],
+ s5:[60.6,66.8,67.9,69.0], s6:[70.9,77.5,78.2,78.9], s7:[80.2,83.8,85.1,86.4],
+ s8:[88.4,91.3,92.9,94.4], s9:[97.2,101.3,102.6,103.9],
+ s10:[106.6,111.7,119.1], s11:[124.8,131.8,140.0], s12:[144.2,150.0,155.6],
+ s13:[161.7,165.95,169.7,174.4]
+};
+window.POPS=[...SEC.map(x=>x.s),...[].concat(...Object.values(SCH))];
+function secIndex(t){for(let i=SEC.length-1;i>=0;i--)if(t>=SEC[i].s)return i;return 0}
+
+/* ---------- background, progress, mascot ---------- */
+const DEFS=`<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BFE8FF"/><stop offset=".65" stop-color="#E6F6FF"/><stop offset="1" stop-color="#FFF3C9"/></linearGradient>
+<linearGradient id="g1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF5C93"/><stop offset=".5" stop-color="#FF9A3D"/><stop offset="1" stop-color="#9B5DFF"/></linearGradient>
+<linearGradient id="gb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF5C93"/><stop offset=".5" stop-color="#FFB300"/><stop offset="1" stop-color="#2BBF7E"/></linearGradient>
+<linearGradient id="gm" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2BBF7E"/><stop offset=".5" stop-color="#FFB300"/><stop offset="1" stop-color="#FF5C93"/></linearGradient>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1F2A5A" flood-opacity=".16"/></filter>
+</defs>`;
+const BUB=['#FF9EB5','#FFD23F','#7FD1FF','#B79CFF','#8CE6B0','#FFB07A'];
+function cloud(x,y,sc,a){return `<g transform="translate(${f1(x)} ${y}) scale(${sc})" opacity="${a}"><ellipse cx="0" cy="0" rx="90" ry="34" fill="#fff"/><circle cx="-30" cy="-26" r="38" fill="#fff"/><circle cx="25" cy="-34" r="46" fill="#fff"/></g>`}
+function bg(t){
+  let s=rect(0,0,W,H,0,'url(#sky)');
+  [[200,170,1.0,.9,22],[900,120,1.3,.8,14],[1500,230,.9,.85,28],[1100,360,.7,.6,18]].forEach(([x,y,sc,a,sp],i)=>{
+    const xx=((x+t*sp)%2400)-240; s+=cloud(xx,y,sc,a)});
+  for(let i=0;i<14;i++){
+    const sp=18+R(i+30)*26,y=1120-((t*sp+R(i+60)*1300)%1300),x=R(i)*1920+Math.sin(t*.8+i)*22,r=14+R(i+90)*30;
+    s+=circ(x,y,r,BUB[i%6],'opacity=".38"');
+  }
+  s+=`<path d="M0 1005 Q 400 935 820 990 T 1620 972 T 1920 1000 V1080 H0Z" fill="#B3EBAA"/>`;
+  s+=`<path d="M0 1052 Q 520 1000 1020 1042 T 1920 1030 V1080 H0Z" fill="#82DB8F"/>`;
+  return s;
+}
+function progress(t){
+  const x0=120,x1=1800,w=x1-x0,p=clamp(t/DUR);
+  let s=rect(x0,30,w,18,9,'#fff','opacity=".75"')+rect(x0,30,Math.max(18,w*p),18,9,'url(#gb)');
+  SEC.forEach((c,i)=>{if(i===0)return;const x=x0+w*c.s/DUR;s+=circ(x,39,5,t>=c.s?'#fff':'#B9C6E8')});
+  const kx=x0+w*p;s+=`<path d="${starP(kx,39,22,t*1.5)}" fill="#FFD23F" stroke="#F2A900" stroke-width="4" stroke-linejoin="round"/>`;
+  return s;
+}
+function mascot(t,sec){
+  const cheer=sec.mood==='cheer';
+  const jump=cheer?Math.abs(Math.sin(t*5))*55:Math.abs(Math.sin(t*3))*12;
+  const cx=1795,ground=1010,cy=ground-72-jump;
+  const blink=(t%3.3)<.13;
+  let m=sec.mood;
+  let s=`<ellipse cx="${cx}" cy="${ground}" rx="${f1(62-jump*.3)}" ry="12" fill="#000" opacity=".12"/>`;
+  s+=`<g transform="translate(${cx} ${f1(cy)})">`;
+  s+=`<line x1="0" y1="-60" x2="0" y2="-92" stroke="#F2A900" stroke-width="6" stroke-linecap="round"/>`+circ(0,-98+Math.sin(t*6)*3,11,'#FF5C93');
+  if(m==='wave'||m==='cheer'){const a=Math.sin(t*9)*18;s+=`<line x1="56" y1="8" x2="94" y2="${f1(-34+a)}" stroke="#F2A900" stroke-width="12" stroke-linecap="round"/>`+circ(96,-38+a,13,'#FFD23F','stroke="#F2A900" stroke-width="5"')}
+  s+=`<ellipse cx="-26" cy="66" rx="22" ry="11" fill="#F2A900"/><ellipse cx="26" cy="66" rx="22" ry="11" fill="#F2A900"/>`;
+  s+=circ(0,0,64,'#FFD23F','stroke="#F2A900" stroke-width="6"');
+  s+=circ(-38,16,11,'#FF9EB5','opacity=".85"')+circ(38,16,11,'#FF9EB5','opacity=".85"');
+  [-22,22].forEach(ex=>{s+=`<ellipse cx="${ex}" cy="-8" rx="9" ry="${blink?1.5:13}" fill="${INK}"/>`;if(!blink)s+=circ(ex-3,-13,3.5,'#fff')});
+  if(m==='worry'){s+=`<line x1="-36" y1="-30" x2="-12" y2="-38" stroke="${INK}" stroke-width="5" stroke-linecap="round"/><line x1="12" y1="-38" x2="36" y2="-30" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>`;
+    s+=`<path d="M-16 32 Q0 18 16 32" stroke="${INK}" stroke-width="6" fill="none" stroke-linecap="round"/>`}
+  else if(m==='o'){s+=`<ellipse cx="0" cy="26" rx="13" ry="${f1(14+Math.sin(t*8)*2)}" fill="${INK}"/>`}
+  else{s+=`<path d="M-20 16 Q0 40 20 16" stroke="${INK}" stroke-width="6" fill="none" stroke-linecap="round"/>`}
+  s+=`</g>`;
+  // speech bubble
+  const lt=t-sec.s,show=lt>.8&&lt<5.4;
+  if(show){
+    const w=meas(sec.phrase,34,700)+64,x=1715-w,y=905,k=eob((lt-.8)/.4)*(1-eo((lt-5)/.4));
+    const inner=rect(x,y,w,72,36,'#fff','stroke="#FFD23F" stroke-width="5" filter="url(#sh)"')+`<polygon points="${f1(x+w-4)},${y+22} ${f1(x+w+34)},${y+50} ${f1(x+w-4)},${y+52}" fill="#fff" stroke="#FFD23F" stroke-width="5" stroke-linejoin="round"/>`+rect(x+w-12,y+16,16,44,0,'#fff')+T(sec.phrase,x+w/2-6,y+49,34,INK,{w:700,a:'middle'});
+    s+=`<g transform="translate(${f1(x+w)} ${y+36}) scale(${f1(Math.max(k,0)*100)/100}) translate(${f1(-(x+w))} ${-(y+36)})">${inner}</g>`;
+  }
+  return s;
+}
+function burst(t){
+  let s='';
+  SEC.forEach((c,i)=>{
+    if(i===0)return;const d=t-c.s;if(d<0||d>.8)return;
+    for(let k=0;k<12;k++){const a=k/12*Math.PI*2+R(i)*3,r=60+d*520*eo(d/.8)*(.7+R(k+i)*.6);
+      const x=1795+Math.cos(a)*r*1.3-300*eo(d/.8)*0,y=900+Math.sin(a)*r*.9-d*80;
+      s+=`<path d="${starP(x,y,18-d*14+R(k)*8,d*6+k)}" fill="${BUB[k%6]}" opacity="${f1(1-d/.8)}"/>`}
+  });
+  return s;
+}
+
+/* ---------- graph board ---------- */
+const COL={A:'#00B8A9',B:'#FF7A3D',C:'#3D7BFF',D:'#9B5DFF',E:'#FFC21A',F:'#3CCB6A'};
+const EDGES=[['A','B'],['A','F'],['F','C'],['F','E'],['A','E'],['E','D'],['C','D'],['B','D']];
+const P0={A:[0,0],B:[2,0],C:[0,2],D:[2,2],E:[1,1],F:[0,1]};
+const P1={A:[.3,.3],B:[1.7,.3],C:[.3,1.7],D:[1.7,1.7],E:[.9,1],F:[.5,1]};
+const P2={A:[.7,.6],B:[1.3,.6],C:[.7,1.4],D:[1.3,1.4],E:[.85,1],F:[.5,1]};
+const P3={A:[.8,.75],B:[1.2,.75],C:[.8,1.25],D:[1.2,1.25],E:[1,1],F:[.6,1]};
+const PC={A:[.93,.93],B:[1.07,.93],C:[.93,1.07],D:[1.07,1.07],E:[1,1],F:[.97,1]};
+const mix=(P,Q,k)=>{const o={};for(const n in P)o[n]=[lerp(P[n][0],Q[n][0],k),lerp(P[n][1],Q[n][1],k)];return o};
+function drawBoard(t,x,y,w,h,pos,o={}){
+  const sc=Math.min(w,h)/2.9,cx=x+w/2,cy=y+h/2,nr=o.r||Math.max(20,sc*.18);
+  const px=u=>cx+(u-1)*sc,py=v=>cy-(v-1)*sc;
+  let s='';
+  if(o.bg!==false){s+=rect(x,y,w,h,36,'#fff','stroke="#BFD7FF" stroke-width="6" filter="url(#sh)"');
+    for(let g=-1;g<=3.01;g+=.5){const gx=px(g),gy=py(g);
+      if(gx>x+20&&gx<x+w-20)s+=`<line x1="${f1(gx)}" y1="${y+22}" x2="${f1(gx)}" y2="${y+h-22}" stroke="#E3EEFF" stroke-width="3"/>`;
+      if(gy>y+20&&gy<y+h-20)s+=`<line x1="${x+22}" y1="${f1(gy)}" x2="${x+w-22}" y2="${f1(gy)}" stroke="#E3EEFF" stroke-width="3"/>`}}
+  // bounding "wire box"
+  if(o.bbox!==false){let x0=9,x1=-9,y0=9,y1=-9;for(const n in pos){x0=Math.min(x0,pos[n][0]);x1=Math.max(x1,pos[n][0]);y0=Math.min(y0,pos[n][1]);y1=Math.max(y1,pos[n][1])}
+    const pad=.3;s+=`<rect x="${f1(px(x0-pad))}" y="${f1(py(y1+pad))}" width="${f1((x1-x0+2*pad)*sc)}" height="${f1((y1-y0+2*pad)*sc)}" rx="22" fill="#FFB300" fill-opacity=".12" stroke="#FFA000" stroke-width="5" stroke-dasharray="18 12" stroke-dashoffset="${f1(-t*40)}"/>`;
+    if(o.label!==false)s+=T('wire box',px(x0-pad)+6,py(y1+pad)-10,26,'#C77E00',{w:700})}
+  // ghost
+  if(o.ghost){for(const n in o.ghost){const gx=px(o.ghost[n][0]),gy=py(o.ghost[n][1]);s+=circ(gx,gy,nr,'none',`stroke="${COL[n]}" stroke-width="5" stroke-dasharray="9 8" opacity=".6"`)}
+    if(o.arrows)for(const n in o.ghost){const a=[px(o.ghost[n][0]),py(o.ghost[n][1])],b=[px(pos[n][0]),py(pos[n][1])];if(Math.hypot(a[0]-b[0],a[1]-b[1])>nr*1.6)s+=arrow(a[0],a[1],b[0],b[1],COL[n],6,nr)}}
+  // wires
+  EDGES.forEach(([a,b],i)=>{const A=pos[a],B=pos[b],x1=px(A[0]),y1=py(A[1]),x2=px(B[0]),y2=py(B[1]);
+    s+=`<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="#9DB3DD" stroke-width="${o.r?6:9}" stroke-linecap="round"/>`;
+    const u=(t*.55+i*.137)%1;s+=circ(lerp(x1,x2,u),lerp(y1,y2,u),o.r?5:7,'#fff','stroke="#6E8ED0" stroke-width="3"')});
+  // nodes
+  Object.keys(pos).forEach((n,i)=>{const bob=Math.sin(t*2.2+i*1.3)*3,X=px(pos[n][0]),Y=py(pos[n][1])+bob;
+    s+=circ(X,Y+6,nr,'#000','opacity=".14"')+circ(X,Y,nr,COL[n],'stroke="#fff" stroke-width="5"')+T(n,X,Y+nr*.36,nr*1.05,n==='E'?'#7A5200':'#fff',{w:700,a:'middle'})});
+  return s;
+}
+function hpwlColor(v){return v>35?'#FF5C93':v>20?'#FF9A00':'#2BBF7E'}
+function meter(t,x,y,val,t0,extra){
+  const w=840,h=120;let inner=card(x,y,w,h);
+  inner+=T('Wire length (HPWL)',x+34,y+42,26,SOFT,{w:500})+T(val>=51.95?'52':val.toFixed(1),x+34,y+98,64,hpwlColor(val),{w:700});
+  const bx=x+330,bw=470;
+  inner+=rect(bx,y+56,bw,32,16,'#E8EEFF')+rect(bx,y+56,Math.max(32,bw*val/52),32,16,'url(#gm)');
+  const gx=bx+bw*14/52;inner+=`<line x1="${f1(gx)}" y1="${y+46}" x2="${f1(gx)}" y2="${y+98}" stroke="#FFB300" stroke-width="5"/>`+T('golden 14',gx,y+36,22,'#C98A00',{w:700,a:'middle'});
+  inner+=T('shorter is better!',bx+bw,y+116-4,22,SOFT,{w:500,a:'end'});
+  return G(t,t0,inner,x+w/2,y+h/2);
+}
+function headerT(t,sec,extra=''){
+  const lt=t-sec.s,k=eob(lt/.5);const wd=meas(sec.title,72,700,'P');
+  return `<g transform="translate(110 150) scale(${f1(k*100)/100}) translate(-110 -150)">${T(sec.title,110,150,72,INK,{w:700})}${rect(110,168,wd*eo(lt/.8),12,6,sec.acc)}${extra}</g>`;
+}
+function stepBadge(t,n,t0,acc){
+  let inner=rect(980,190,420,64,32,'#fff','stroke="'+acc+'" stroke-width="5"')+T(`Step ${n} of 5`,1010,235,32,INK,{w:700});
+  for(let i=0;i<5;i++)inner+=circ(1255+i*30,222,10,i<n?acc:'#DCE5FA');
+  return G(t,t0,inner,1190,222);
+}
+function explain(t,txt,t0,acc){
+  const inner=card(980,275,850,245)+`<path d="M980 311 a36 36 0 0 1 36 -36 H1000 V520 H1016 a36 36 0 0 1 -36 -36 Z" fill="${acc}"/>`+TW(txt,1030,330,770,32,INK,{acc:acc==='#FFB300'?'#E07B00':acc});
+  return G(t,t0,inner,1405,410);
+}
+function chips3(t,items,times,acc){
+  let s='';items.forEach((it,i)=>{const yy=545+i*98,inner=rect(980,yy,850,84,42,PAST[i%4],'stroke="#fff" stroke-width="5"')+path('check',1030,yy+42,DARK[i%4])+T(it,1085,yy+54,32,INK,{w:500});s+=G(t,times[i],inner,1405,yy+42)});return s;
+}
+function path(n,cx,cy,col){
+  if(n==='check')return circ(cx,cy,24,col)+`<polyline points="${cx-11},${cy} ${cx-3},${cy+9} ${cx+12},${cy-9}" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return '';
+}
+
+/* ---------- icons for step cards ---------- */
+function icon(n,cx,cy,col,t){
+  const b=Math.sin(t*3)*4;cy+=b;
+  if(n==='browser')return rect(cx-85,cy-62,170,124,18,'#fff',`stroke="${col}" stroke-width="8"`)+rect(cx-85,cy-62,170,34,18,col)+rect(cx-85,cy-46,170,18,0,col)+circ(cx-62,cy-45,6,'#fff')+circ(cx-44,cy-45,6,'#fff')+circ(cx-26,cy-45,6,'#fff')+`<line x1="${cx-30}" y1="${cy+22}" x2="${cx+28}" y2="${cy-4}" stroke="#9DB3DD" stroke-width="6" stroke-linecap="round"/>`+circ(cx-30,cy+22,16,'#3CCB6A')+circ(cx+28,cy-4,16,'#FFC21A');
+  if(n==='play')return circ(cx,cy,70,col)+`<polygon points="${cx-22},${cy-38} ${cx-22},${cy+38} ${cx+42},${cy}" fill="#fff"/>`;
+  if(n==='lock')return rect(cx-56,cy-6,112,84,18,col)+`<path d="M${cx-34} ${cy-6} V${cy-34} a34 34 0 0 1 68 0 V${cy-6}" fill="none" stroke="#B8860B" stroke-width="16" stroke-linecap="round"/>`+circ(cx,cy+30,13,'#fff')+rect(cx-5,cy+30,10,28,5,'#fff')+`<path d="${starP(cx+66,cy-60,22,t)}" fill="#FFD23F"/>`;
+  if(n==='code')return rect(cx-88,cy-62,176,124,22,col)+T('</>',cx,cy+22,70,'#fff',{w:700,a:'middle',f:'M'});
+  if(n==='file')return `<path d="M${cx-62} ${cy-76} H${cx+22} L${cx+62} ${cy-36} V${cy+76} H${cx-62} Z" fill="#fff" stroke="${col}" stroke-width="8" stroke-linejoin="round"/><path d="M${cx+22} ${cy-76} V${cy-36} H${cx+62}" fill="none" stroke="${col}" stroke-width="8" stroke-linejoin="round"/>`+T('{ }',cx,cy+20,56,col,{w:700,a:'middle',f:'M'});
+  if(n==='check')return circ(cx,cy,72,col)+`<polyline points="${cx-34},${cy+2} ${cx-8},${cy+30} ${cx+38},${cy-26}" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if(n==='warn')return `<path d="M${cx} ${cy-58} L${cx+66} ${cy+50} H${cx-66} Z" fill="#FFB300" stroke="#E08A00" stroke-width="10" stroke-linejoin="round"/>`+T('!',cx,cy+34,70,'#fff',{w:700,a:'middle'});
+  return '';
+}
+function stepCards(t,items,times,acc,icons,cols){
+  let s='';
+  items.forEach((it,i)=>{
+    const x=90+i*600,y=210,w=540,h=580,cx=x+w/2;
+    let inner=card(x,y,w,h)+rect(x,y,w,20,0,cols[i],'clip-path="inset(0)"');
+    inner=card(x,y,w,h)+`<path d="M${x} ${y+36} a36 36 0 0 1 36 -36 H${x+w-36} a36 36 0 0 1 36 36 V${y+30} H${x} Z" fill="${cols[i]}"/>`;
+    inner+=circ(x+60,y+84,40,cols[i],'stroke="#fff" stroke-width="6"')+T(String(i+1),x+60,y+100,46,'#fff',{w:700,a:'middle'});
+    inner+=icon(icons[i],cx,y+210,cols[i],t+i);
+    inner+=TW(it,x+40,y+370,w-80,34,INK,{acc:cols[i],lh:46});
+    s+=G(t,times[i],inner,cx,y+h/2,{d:.55});
+    if(i<2&&t>times[i+1]-.3){const ax=x+w+30,a=.5+.5*Math.sin(t*6+i);s+=`<polygon points="${ax-12},${y+270-22} ${ax+14},${y+270} ${ax-12},${y+270+22}" fill="${acc}" opacity="${f1(a)}"/>`}
+  });
+  return s;
+}
+
+/* ---------- scenes ---------- */
+const scenes=[];
+// 0 title
+scenes[0]=(t,sec)=>{
+  let s='';
+  s+=G(t,.2,rect(110,190,360,58,29,'#fff','stroke="#FF5C93" stroke-width="5"')+T('Module 2 · Lesson 1',290,229,28,'#FF5C93',{w:700,a:'middle'}),290,219);
+  const lines=[['Force-directed',330,'#1F2A5A'],['placement',445,'url(#g1)']];
+  lines.forEach(([txt,by,fill],li)=>{let acc=0;[...txt].forEach((ch,ci)=>{
+    const t0=.35+(li*14+ci)*.045,u=(t-t0)/.5;const wch=meas(ch,104,700);
+    if(u>0){const k=eob(u);const dy=(1-k)*-90+Math.sin(t*2.2+ci*.5)*(t>3?4:0);
+      s+=`<text x="${f1(110+acc)}" y="${f1(by+dy)}" font-family="P" font-weight="700" font-size="104" fill="${fill}" opacity="${f1(clamp(u*3))}">${esc(ch)}</text>`}
+    acc+=meas(txt.slice(0,ci+1),104,700)-meas(txt.slice(0,ci),104,700)})});
+  s+=G(t,1.6,card(110,500,830,290)+TW('Every part is pulled toward the **average** of its wire-friends, plus a gentle pull to the **center**.',150,575,690,38,INK,{acc:'#FF5C93',lh:56,w:500}),525,650);
+  // demo board
+  const k=t<6.73?0:ez(pp((t-6.73)/4.6));
+  const pos=mix(P0,P2,k);
+  s+=G(t,.9,drawBoard(t,1000,190,760,600,pos,{ghost:t>6.73?P0:null,arrows:true})+T(k>.5?'shorter wires!':'long wires...',1380,840,40,k>.5?'#2BBF7E':'#FF5C93',{w:700,a:'middle'}),1380,490);
+  return s;
+};
+// 1 idea
+scenes[1]=(t,sec)=>{
+  let s=headerT(t,sec);
+  const ox=90,oy=190,pw=800,ph=660;
+  const F1=[170,540,'B'],F2=[650,480,'D'],F3=[420,200,'F'];
+  const c=[(F1[0]+F2[0]+F3[0])/3,(F1[1]+F2[1]+F3[1])/3];
+  const p=[[150,260]];for(let i=0;i<3;i++){const q=p[i];p.push([q[0]+(c[0]-q[0])*.5,q[1]+(c[1]-q[1])*.5])}
+  const ph0=(t-16.47+7.2)%7.2,r=Math.min(2,Math.floor(ph0/2.2)),u=(ph0-r*2.2)/2.2;
+  const mv=ez((u-.3)/.5);const E=[lerp(p[r][0],p[r+1][0],mv),lerp(p[r][1],p[r+1][1],mv)];
+  let inner=card(ox,oy,pw,ph)+T('One cell, three friends',ox+pw/2,oy+62,38,INK,{w:700,a:'middle'});
+  const fr=[F1,F2,F3];
+  fr.forEach(f=>{inner+=`<line x1="${f1(ox+E[0])}" y1="${f1(oy+E[1])}" x2="${ox+f[0]}" y2="${oy+f[1]}" stroke="${COL[f[2]]}" stroke-width="6" stroke-dasharray="4 14" stroke-linecap="round" stroke-dashoffset="${f1(-t*30)}" opacity=".8"/>`});
+  for(let i=0;i<r+1;i++)if(i<=r&&(i<r||u>.8))inner+=circ(ox+p[i][0],oy+p[i][1],12,COL.E,'opacity=".35"');
+  inner+=`<path d="${starP(ox+c[0],oy+c[1],34+Math.sin(t*5)*3,t*.8)}" fill="#FF5C93" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>`;
+  inner+=arrow(ox+E[0],oy+E[1],ox+c[0],oy+c[1],'#FF5C93',7,44);
+  fr.forEach(f=>{const X=ox+f[0],Y=oy+f[1];inner+=circ(X,Y+5,34,'#000','opacity=".13"')+circ(X,Y,34,COL[f[2]],'stroke="#fff" stroke-width="5"')+T(f[2],X,Y+13,36,'#fff',{w:700,a:'middle'})});
+  inner+=circ(ox+E[0],oy+E[1]+5,38,'#000','opacity=".13"')+circ(ox+E[0],oy+E[1],38,COL.E,'stroke="#fff" stroke-width="5"')+T('E',ox+E[0],oy+E[1]+14,40,'#7A5200',{w:700,a:'middle'});
+  inner+=rect(ox+pw-190,oy+84,150,52,26,'#FFF0B8')+T('Round '+(r+1),ox+pw-115,oy+120,30,'#B07800',{w:700,a:'middle'});
+  inner+=T('★ = the average of the friends',ox+pw/2,oy+ph-34,30,SOFT,{w:500,a:'middle'});
+  s+=G(t,sec.s+.5,inner,ox+pw/2,oy+ph/2);
+  s+=bulletCards(t,['Each **iteration** (round), every free cell moves a little.','**Fixed pads** stay put.','Too much **alpha** → cells pile up. Too little → they barely move.','Report **HPWL** (wire length) before and after.'],SCH.s1,940,200,890,152,18,36);
+  return s;
+};
+// 2 pseudocode
+scenes[2]=(t,sec)=>{
+  let s=headerT(t,sec);
+  const ox=90,oy=190,pw=800,ph=660;
+  const a=.5+.4*Math.sin((t-34)*.85);
+  const lx=ox+80,rx=ox+720,ly=oy+330,nx=lerp(lx,rx,a);
+  let inner=card(ox,oy,pw,ph)+T('new = (1 − α) × old + α × target',ox+pw/2,oy+84,34,INK,{w:700,a:'middle'});
+  inner+=`<line x1="${lx}" y1="${ly}" x2="${rx}" y2="${ly}" stroke="#C9D6F2" stroke-width="12" stroke-linecap="round"/>`;
+  inner+=arrow(lx+30,ly-100,Math.max(nx,lx+90),ly-100,'#9B5DFF',7,0);
+  inner+=circ(lx,ly,26,COL.E,'opacity=".35" stroke="#FFC21A" stroke-width="4" stroke-dasharray="7 6"')+T('old',lx,ly+70,28,SOFT,{w:700,a:'middle'});
+  inner+=`<path d="${starP(rx,ly,40,t*.7)}" fill="#FF5C93" stroke="#fff" stroke-width="4"/>`+T('target',rx,ly+82,28,SOFT,{w:700,a:'middle'});
+  inner+=circ(nx,ly+4,30,'#000','opacity=".12"')+circ(nx,ly,30,COL.E,'stroke="#fff" stroke-width="5"')+T('new',nx,ly-48,28,'#9B5DFF',{w:700,a:'middle'});
+  const sy=oy+510;
+  inner+=rect(lx,sy-10,640,20,10,'#E4DAFF')+rect(lx,sy-10,640*a,20,10,'#9B5DFF')+circ(lx+640*a,sy,26,'#fff','stroke="#9B5DFF" stroke-width="8"');
+  inner+=T('α = '+a.toFixed(2),ox+pw/2,sy+74,46,'#9B5DFF',{w:700,a:'middle'})+T('small α = tiny step · big α = giant leap',ox+pw/2,oy+ph-26,26,SOFT,{w:500,a:'middle'});
+  s+=G(t,sec.s+.5,inner,ox+pw/2,oy+ph/2);
+  s+=bulletCards(t,["Blend each free cell toward its neighbors' average with step **alpha**.",'**Fixed pads** do not move.',"Open the module's examples file and find the **Pseudocode** section.",'That written sketch is what you implement on the implement track and what the browser lab follows.'],SCH.s2,940,200,890,152,18,31);
+  return s;
+};
+// 3 starter 52
+scenes[3]=(t,sec)=>{
+  let s=headerT(t,sec);const lt=t-sec.s;
+  let inner=card(380,230,1160,560)+T('We start with a wire length of',960,330,46,SOFT,{w:500,a:'middle'});
+  const sh=lt<1?Math.sin(lt*40)*6*(1-lt):0;
+  inner+=T('52',960+sh,590,300,'#FF5C93',{w:700,a:'middle'});
+  let d='M 460 720 ';for(let x=0;x<=1000;x+=10)d+=`L ${460+x} ${f1(720+Math.sin(x/38+t*5)*22)} `;
+  inner+=`<path d="${d}" fill="none" stroke="#FF9A3D" stroke-width="10" stroke-linecap="round"/>`+circ(460,720,18,COL.A)+circ(1460,720,18,COL.B);
+  inner+=T('the “starter” placement: long wires!',960,772,28,SOFT,{w:500,a:'middle'});
+  s+=G(t,sec.s+.2,inner,960,510,{d:.6});
+  return s;
+};
+// 4 code
+scenes[4]=(t,sec)=>{
+  let s=headerT(t,sec);
+  const KW='#9B5DFF',ID='#1F2A5A',OP='#FF5C93',NU='#FF7A3D';
+  const L=[
+   [['INPUT',KW],[': positions, nets, α, iters, fixed pads',ID]],
+   [['OUTPUT',KW],[': updated positions + HPWL',ID]],
+   [['each iter',KW],[', for free cell c:',ID]],
+   [['  tgt ',ID],['←',OP],[' avg neighbor coords (+ weak center)',ID]],
+   [['  pos[c] ',ID],['←',OP],[' (1−α)·pos[c] + α·tgt',ID]],
+   [['pads stay fixed',KW]],
+   [['GOLDEN',KW],[' starter ',ID],['52',NU],[' → ',OP],['≈18.7',NU],[' after defaults',ID]]
+  ];
+  const C=['#4C7DFF','#2BBF7E','#FF9A00','#9B5DFF','#FF5C93','#00B8A9','#FF7A3D'];
+  const K=['what we start with','what we get back','repeat every round','find the friends’ middle','take a small step','pads never move','52 → about 18.7!'];
+  s+=G(t,sec.s+.1,card(90,190,1130,650,'#fff'),655,515);
+  L.forEach((ln,i)=>{
+    const by=275+i*85;
+    let inner='';
+    const hl=rect(110,by-52,1090,70,18,C[i],`opacity="${i===0||true?.12:.12}"`);
+    inner+=hl+`<text xml:space="preserve" x="135" y="${by}" font-family="M" font-weight="700" font-size="35" style="white-space:pre">`+ln.map(([tx,c])=>`<tspan fill="${c}">${esc(tx)}</tspan>`).join('')+`</text>`;
+    s+=G(t,SCH.s4[i],inner,655,by-17,{d:.35});
+    s+=G(t,SCH.s4[i]+.1,rect(1250,by-52,580,70,35,C[i])+T(K[i],1540,by-4,31,'#fff',{w:700,a:'middle'}),1540,by-17,{d:.4});
+  });
+  return s;
+};
+// graph scenes
+function graphScene(n,pos,ghost,arrows,val,expl,bul,tt,extraBoard=''){
+  return (t,sec)=>{
+    let s=headerT(t,sec);
+    s+=meter(t,90,190,typeof val==='function'?val(t):val,sec.s+.3);
+    s+=G(t,sec.s+.2,drawBoard(t,90,330,840,530,typeof pos==='function'?pos(t):pos,{ghost:typeof ghost==='function'?ghost(t):ghost,arrows})+(extraBoard?extraBoard(t):''),510,595);
+    s+=stepBadge(t,n,sec.s+.3,sec.acc)+explain(t,expl,tt[0],sec.acc)+chips3(t,bul,tt.slice(1),sec.acc);
+    return s;
+  };
+}
+scenes[5]=graphScene(1,t=>mix(P0,P1,.07*(1+Math.sin(t*3))),null,false,52,
+ 'Force-directed place pulls each cell toward the **average** of its neighbors, plus a weak pull to the **center**. We start spread out at HPWL **52**.',
+ ['Spring pull along wires','Weak pull to the center','Small alpha avoids collapse'],SCH.s5);
+scenes[6]=graphScene(2,t=>mix(P0,P1,ez((t-71.3)/3)),P0,true,t=>lerp(52,34.5,ez((t-71.3)/3)),
+ 'After a couple of rounds, **A–D** drift toward the center while **E** and **F** follow their neighbors. The wires are already getting shorter!',
+ ['Each free cell → neighbor average','Blend with a small alpha','Pads stay free in this lab'],SCH.s6);
+scenes[7]=graphScene(3,t=>mix(P1,P2,ez((t-80.5)/3.5)),P1,true,t=>lerp(34.5,18.7,ez((t-80.5)/3.5)),
+ 'Five rounds (the default) land near **18.7**. Much better than 52, but still above the compact golden **14**.',
+ ['Report HPWL before and after','Force ≈ 18.7 on this seed','Not a full legalizer'],SCH.s7);
+scenes[8]=graphScene(4,t=>mix(P2,P3,ez(pp((t-89.5)/3))),null,false,18.7,
+ 'The golden **14** is even tighter. Force is a cheap, simple move: great for learning, but it does not claim the absolute minimum.',
+ ['Force ≈ 18.7','Golden = 14','Same nets, different tightness'],SCH.s8,
+ t=>{const k=ez(pp((t-89.5)/3));const g=k>.5;return rect(510-110,800,220,48,24,g?'#FFB300':'#4C7DFF')+T(g?'golden · 14':'force · 18.7',510,835,28,'#fff',{w:700,a:'middle'})});
+// 9 alpha dial
+scenes[9]=(t,sec)=>{
+  const a=.5+.45*Math.sin((t-97)*.95-1.3);
+  const pos=a<.5?mix(P0,P2,ez(a/.5)):mix(P2,PC,ez((a-.5)/.5));
+  let s=headerT(t,sec);
+  const x=90,y=190,w=840,h=120;
+  let inner=card(x,y,w,h)+T('α = '+a.toFixed(2),x+34,y+82,54,'#9B5DFF',{w:700});
+  const bx=x+330,bw=470;
+  inner+=rect(bx,y+54,bw,24,12,'#E4DAFF')+rect(bx,y+54,bw*a,24,12,'#9B5DFF')+circ(bx+bw*a,y+66,24,'#fff','stroke="#9B5DFF" stroke-width="8"');
+  inner+=T('too little',bx,y+30,22,SOFT,{w:500})+T('too much',bx+bw,y+30,22,SOFT,{w:500,a:'end'});
+  const lab=a<.3?'barely moves…':a<.7?'just right!':'collapse!';
+  inner+=T(lab,bx+bw/2,y+106,26,a<.3?'#FF9A00':a<.7?'#2BBF7E':'#FF5C93',{w:700,a:'middle'});
+  s+=G(t,sec.s+.3,inner,x+w/2,y+h/2);
+  s+=G(t,sec.s+.2,drawBoard(t,90,330,840,530,pos,{}),510,595);
+  s+=stepBadge(t,5,sec.s+.3,sec.acc)+explain(t,'Too much alpha **stacks** the cells; too little barely moves them. Lock the **iteration count** and **alpha** so your **18.7** golden stays stable.',SCH.s9[0],sec.acc);
+  s+=chips3(t,['Neighbor average + center pull','Starter 52 → ≈ 18.7','Next up: quadratic, with fixed pads'],SCH.s9.slice(1),sec.acc);
+  return s;
+};
+scenes[10]=(t,sec)=>headerT(t,sec)+stepCards(t,['Open the **force-directed-place** lab from the tools shelf.','Load the starter placement and run the algorithm **once**.','Work the **challenges** that lock the goldens.'],SCH.s10,sec.acc,['browser','play','lock'],['#00B8A9','#4C7DFF','#FF7A3D']);
+scenes[11]=(t,sec)=>headerT(t,sec)+stepCards(t,['Work in the **implement track**.','Parse **tiny_place.json** and run the algorithm with a fixed (deterministic) seed.','Match the **browser goldens** before you claim the checklist.'],SCH.s11,sec.acc,['code','file','check'],['#FF7A3D','#9B5DFF','#2BBF7E']);
+// 12 pitfalls
+scenes[12]=(t,sec)=>{
+  let s=headerT(t,sec,`<g transform="translate(${110+meas('Pitfalls',72,700)+90} 122) scale(.6)">${icon('warn',0,0,'#FFB300',t)}</g>`);
+  const cols=['#FF9A00','#FF5C93','#4C7DFF'],tx=['Alpha too small: cells barely move.','Alpha too big: cells pile up in a heap.','Compare HPWL with the **same net model**.'];
+  [0,1,2].forEach(i=>{
+    const x=90+i*600,y=210,w=540,h=600,cx=x+w/2;
+    let inner=card(x,y,w,h)+`<path d="M${x} ${y+36} a36 36 0 0 1 36 -36 H${x+w-36} a36 36 0 0 1 36 36 V${y+30} H${x} Z" fill="${cols[i]}"/>`;
+    inner+=TW(tx[i],x+36,y+96,w-72,34,INK,{w:700,acc:cols[i],lh:44});
+    if(i===0)inner+=drawBoard(t,x+30,y+210,w-60,360,mix(P0,P1,.06*(1+Math.sin(t*3))),{r:22,label:false});
+    if(i===1){const j={};for(const n in PC)j[n]=[PC[n][0]+Math.sin(t*5+n.charCodeAt(0))*.02,PC[n][1]+Math.cos(t*4+n.charCodeAt(0))*.02];inner+=drawBoard(t,x+30,y+210,w-60,360,j,{r:22,label:false})}
+    if(i===2){const bw=380,bx=x+120;
+      inner+=T('before',bx-12,y+290,28,SOFT,{w:700,a:'end'})+rect(bx,y+262,bw,40,20,'#FFD3E3')+rect(bx,y+262,bw,40,20,'#FF5C93')+T('52',bx+bw-24,y+293,30,'#fff',{w:700,a:'end'});
+      inner+=T('after',bx-12,y+378,28,SOFT,{w:700,a:'end'})+rect(bx,y+350,bw,40,20,'#D3F5E0')+rect(bx,y+350,bw*18.7/52,40,20,'#2BBF7E')+T('18.7',bx+bw*18.7/52-20,y+381,30,'#fff',{w:700,a:'end'});
+      inner+=rect(x+60,y+440,w-120,88,44,'#FFF0B8')+T('same ruler · same nets',cx,y+496,32,'#B07800',{w:700,a:'middle'});
+      inner+=`<path d="M${x+60} ${y+232} H${x+w-60}" stroke="#DCE5FA" stroke-width="4" stroke-dasharray="3 12" stroke-linecap="round"/>`}
+    s+=G(t,SCH.s12[i],inner,cx,y+h/2,{d:.55});
+  });
+  return s;
+};
+// 13 your turn
+scenes[13]=(t,sec)=>{
+  let s=headerT(t,sec);
+  const items=['Complete the checklist for at least one track, preferably **both**.','Implement until your metrics match the starter **goldens**.','When you’re ready, take the short **quiz**, then continue to the next module.'];
+  const cols=['#4C7DFF','#2BBF7E','#FF9A00'];
+  items.forEach((it,i)=>{
+    const y=220+i*170,t0=SCH.s13[i];
+    let inner=card(150,y,1500,140)+TC(it,320,y+70,1280,40,INK,{acc:cols[i],w:500});
+    inner+=circ(235,y+70,48,'#fff','stroke="'+cols[i]+'" stroke-width="8"');
+    const ck=eob((t-t0-.35)/.4);
+    if(t>t0+.35)inner+=`<g transform="translate(235 ${y+70}) scale(${f1(ck*100)/100}) translate(-235 ${-(y+70)})">${circ(235,y+70,48,cols[i])}<polyline points="212,${y+70} 229,${y+88} 260,${y+50}" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+    s+=G(t,t0,inner,900,y+70);
+  });
+  const t3=SCH.s13[3];
+  if(t>=t3){const k=eob((t-t3)/.6);s+=`<g transform="translate(960 840) scale(${f1(k*100)/100}) translate(-960 -840)">${T('Great job!',960,860,120,'url(#g1)',{w:700,a:'middle'})}</g>`;
+    for(let i=0;i<90;i++){const d=t-t3,x0=R(i)*1920,sp=260+R(i+200)*340,y=-40+d*sp-(R(i+400)*300)+Math.sin(d*3+i)*10,x=x0+Math.sin(d*2+i)*40;if(y>1100)continue;
+      s+=`<rect x="${f1(x)}" y="${f1(y)}" width="${14+R(i+7)*12}" height="${10+R(i+9)*10}" rx="3" fill="${BUB[i%6]}" transform="rotate(${f1(d*200+i*40)} ${f1(x)} ${f1(y)})"/>`}
+  }
+  return s;
+};
+
+/* ---------- main ---------- */
+const svg=document.getElementById('s');
+function frame(t){
+  const i=secIndex(t),sec=SEC[i],lt=t-sec.s;
+  let body='';
+  try{
+    const k=eo(lt/.45);
+    body=`<g opacity="${f1(clamp(lt/.2)*100)/100}" transform="translate(${f1((1-k)*70)} 0)">${scenes[i](t,sec)}</g>`;
+  }catch(e){body=`<text x="60" y="400" font-size="36" fill="red">ERR ${i}: ${esc(String(e.stack||e).slice(0,300))}</text>`}
+  svg.innerHTML=DEFS+bg(t)+progress(t)+body+mascot(t,sec)+burst(t);
+}
+frame(0);
+</script>
+</body></html>

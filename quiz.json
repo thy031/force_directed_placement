@@ -1,0 +1,52 @@
+{
+  "id": "module02-01-force-directed-place",
+  "title": "Force-directed check",
+  "items": [
+    {
+      "id": "q1",
+      "type": "multiple_choice",
+      "prompt": "In each iteration of force-directed placement, where is each free cell pulled?",
+      "choices": [
+        "Toward the average position of its wire-connected neighbors, plus a weak pull to the center",
+        "Toward the farthest corner of the chip to maximize wire box area",
+        "Directly onto the nearest fixed pad regardless of its nets",
+        "To a random coordinate on every iteration"
+      ],
+      "answer": 0,
+      "explain": "Wires act like rubber bands pulling each free cell toward its neighbor average, combined with a gentle pull toward the center."
+    },
+    {
+      "id": "q2",
+      "type": "multiple_choice",
+      "prompt": "What happens if the step size α (alpha) is set too large?",
+      "choices": [
+        "Fixed pads detach and drift toward the center",
+        "Cells barely move from their starter positions",
+        "Free cells overshoot and pile up together into a collapsed heap",
+        "HPWL automatically reaches the exact golden minimum of 14"
+      ],
+      "answer": 2,
+      "explain": "Too much alpha (or too many rounds) stacks cells on top of each other, whereas too little alpha barely moves them."
+    },
+    {
+      "id": "q3",
+      "type": "true_false",
+      "prompt": "Because default force-directed placement reduces HPWL from 52 to about 18.7, it acts as a complete legalizer that guarantees the minimum possible wirelength.",
+      "answer": false,
+      "explain": "Force-directed placement is a cheap, continuous move (52 → ≈18.7) that improves wirelength without claiming the compact golden 14 or full legalization."
+    },
+    {
+      "id": "q4",
+      "type": "multiple_choice",
+      "prompt": "When reporting results from force-directed placement, what must you ensure?",
+      "choices": [
+        "Compare before and after HPWL using the exact same net model (and verify cells have not collapsed)",
+        "Switch from a bounding-box net model to a clique model after running to make HPWL look smaller",
+        "Move fixed pads inward along with free cells",
+        "Report only the final HPWL number without starter metrics or cell coordinates"
+      ],
+      "answer": 0,
+      "explain": "Using the same net model ('same ruler · same nets') before and after—while keeping fixed pads anchored and checking for cell pile-ups—makes HPWL comparisons valid."
+    }
+  ]
+}

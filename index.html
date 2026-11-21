@@ -1,0 +1,2492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Force-directed placement — Placement for EDA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap">
+  <style>
+    :root {
+      --sky-top: #BFE8FF;
+      --sky-mid: #E6F6FF;
+      --sky-bot: #FFF3C9;
+      --hill-light: #B3EBAA;
+      --hill-dark: #82DB8F;
+      --surface: #FFFFFF;
+      --surface-soft: #F5F9FF;
+      --ink: #1F2A5A;
+      --soft: #6B7AA8;
+      --pink: #FF5C93;
+      --orange: #FF7A3D;
+      --amber: #FF9A00;
+      --yellow: #FFB300;
+      --gold: #FFD23F;
+      --green: #2BBF7E;
+      --teal: #00B8A9;
+      --blue: #4C7DFF;
+      --purple: #9B5DFF;
+      --past-yellow: #FFE9A8;
+      --past-green: #C9F2DC;
+      --past-blue: #D3E1FF;
+      --past-pink: #FFD3E3;
+      --line: #DCE5FA;
+      --radius-lg: 36px;
+      --radius-md: 24px;
+      --radius-sm: 16px;
+      --shadow: 0 8px 24px rgba(31, 42, 90, 0.13);
+      --shadow-sm: 0 4px 12px rgba(31, 42, 90, 0.08);
+      --font: "Poppins", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --mono: "IBM Plex Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--ink);
+      line-height: 1.6;
+      background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 45%, var(--sky-bot) 100%);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Ambient floating bubbles */
+    .ambient-bubbles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .ambient-bubbles span {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.32;
+      animation: floatUp 22s linear infinite;
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(105vh) scale(0.9); }
+      100% { transform: translateY(-15vh) scale(1.08); }
+    }
+
+    a { color: var(--blue); text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; text-underline-offset: .18em; }
+
+    .skip-link {
+      position: absolute; left: -999px; top: .75rem;
+      background: var(--pink); color: #fff; font-weight: 700;
+      padding: .55rem 1rem; border-radius: 999px; z-index: 1000;
+    }
+    .skip-link:focus { left: .75rem; }
+
+    /* Sticky glass header */
+    .site-header {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(12px);
+      background: rgba(255, 255, 255, 0.86);
+      border-bottom: 3px solid #fff;
+      box-shadow: 0 4px 18px rgba(31, 42, 90, 0.08);
+      padding: .75rem 1.25rem;
+    }
+    .site-header-inner {
+      max-width: var(--max); margin: 0 auto;
+      display: flex; flex-wrap: wrap; gap: .6rem 1.25rem;
+      align-items: center; justify-content: space-between;
+    }
+    .brand {
+      font-size: 1.15rem; font-weight: 700; margin: 0;
+      display: inline-flex; align-items: center; gap: .55rem;
+    }
+    .brand a { color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: .5rem; }
+    .pip-badge {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--gold); border: 3px solid #F2A900;
+      display: inline-grid; place-items: center; font-size: 14px;
+      box-shadow: 0 3px 8px rgba(242, 169, 0, 0.35);
+    }
+    .site-nav { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .site-nav a {
+      font-weight: 700; font-size: .92rem; color: var(--soft);
+      padding: .4rem .85rem; border-radius: 999px; text-decoration: none;
+      transition: all .18s ease;
+    }
+    .site-nav a:hover, .site-nav a.is-active {
+      color: #fff; background: var(--blue);
+      box-shadow: 0 4px 10px rgba(76, 125, 255, 0.3);
+    }
+
+    .site-search { position: relative; min-width: min(100%, 14rem); max-width: 18rem; flex: 1; }
+    .site-search-input {
+      width: 100%; font: inherit; font-size: .9rem; color: var(--ink);
+      padding: .45rem .85rem; border: 2px solid var(--line);
+      border-radius: 999px; background: var(--surface-soft); outline: none;
+    }
+    .site-search-input:focus { border-color: var(--blue); background: #fff; }
+    .site-search-results {
+      position: absolute; top: calc(100% + .45rem); left: 0; right: 0; z-index: 60;
+      background: var(--surface); border: 3px solid #fff;
+      border-radius: var(--radius-md); box-shadow: var(--shadow);
+      max-height: 16rem; overflow: auto;
+    }
+    .site-search-hit {
+      display: block; padding: .55rem .9rem; color: var(--ink);
+      text-decoration: none; border-bottom: 1px solid var(--line); font-weight: 500;
+    }
+    .site-search-hit:hover { background: var(--past-blue); text-decoration: none; }
+
+    .site-header-crumb {
+      max-width: var(--max); margin: .45rem auto 0;
+      font-size: .84rem; color: var(--soft); font-weight: 500;
+    }
+    .site-header-crumb .here { color: var(--ink); font-weight: 700; }
+    .site-header-crumb nav > * + *::before { content: "›"; margin: 0 .45rem; color: var(--soft); }
+
+    main {
+      position: relative; z-index: 1;
+      max-width: var(--max); margin: 0 auto;
+      padding: 1.75rem 1.25rem 4rem;
+    }
+
+    /* Hero */
+    .hero {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem 2rem;
+      box-shadow: var(--shadow);
+      border: 4px solid #fff;
+      margin-bottom: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .eyebrow {
+      display: inline-block;
+      font-size: .82rem; font-weight: 700; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--pink);
+      background: var(--past-pink); border: 3px solid #fff;
+      padding: .28rem .85rem; border-radius: 999px;
+      margin-bottom: .65rem; box-shadow: var(--shadow-sm);
+    }
+    h1 {
+      font-size: clamp(2.1rem, 4.6vw, 3.1rem);
+      font-weight: 700; letter-spacing: -.02em; line-height: 1.15;
+      margin: 0 0 .65rem; color: var(--ink);
+    }
+    .grad-text {
+      background: linear-gradient(90deg, #FF5C93 0%, #FF9A3D 50%, #9B5DFF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    h2 {
+      font-size: 1.65rem; font-weight: 700; margin: 2.2rem 0 .85rem;
+      color: var(--ink); display: inline-block; position: relative;
+    }
+    h2::after {
+      content: ""; display: block; height: 6px; width: 68%;
+      border-radius: 999px; margin-top: 4px;
+      background: linear-gradient(90deg, var(--pink), var(--amber));
+    }
+    h3 { font-size: 1.15rem; font-weight: 700; margin: 1rem 0 .45rem; color: var(--ink); }
+    .lead { font-size: 1.06rem; color: var(--soft); max-width: 48rem; font-weight: 500; }
+
+    /* Buttons & Pills */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+      font-family: var(--font); font-weight: 700; font-size: .92rem;
+      padding: .6rem 1.15rem; border-radius: 999px;
+      border: 3px solid #fff; cursor: pointer; text-decoration: none;
+      transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn:hover { transform: translateY(-2px); text-decoration: none; }
+    .btn:active { transform: translateY(0); }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: #3868EB; color: #fff; }
+    .btn-pink { background: var(--pink); color: #fff; }
+    .btn-pink:hover { background: #EA467E; color: #fff; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-green:hover { background: #22A66B; color: #fff; }
+    .btn-secondary { background: var(--surface-soft); color: var(--ink); border-color: var(--line); }
+    .btn-secondary:hover { border-color: var(--blue); color: var(--blue); background: #fff; }
+    .btn-ghost { background: #fff; color: var(--soft); border-color: var(--line); }
+    .btn-ghost:hover { color: var(--ink); border-color: var(--soft); }
+    .btn.is-done { background: var(--past-green); color: #16794C; border-color: #fff; }
+    .btn-link {
+      background: none; border: 0; padding: 0; color: var(--blue);
+      font: inherit; font-weight: 700; cursor: pointer;
+      text-decoration: underline; text-underline-offset: .18em;
+    }
+
+    .clip-meta { display: flex; flex-wrap: wrap; gap: .5rem; margin: .85rem 0 1.1rem; }
+    .pill {
+      display: inline-flex; align-items: center; gap: .3rem;
+      font-size: .82rem; font-weight: 700;
+      padding: .28rem .8rem; border-radius: 999px;
+      background: var(--past-blue); color: var(--blue);
+      border: 3px solid #fff; box-shadow: var(--shadow-sm);
+    }
+    .pill-muted { background: var(--past-yellow); color: #B87400; }
+    .pill-green { background: var(--past-green); color: #16794C; }
+    .clip-toolbar { display: flex; flex-wrap: wrap; gap: .55rem; }
+
+    /* Mode Tabs */
+    .page-tabs {
+      display: inline-flex; gap: .4rem; margin: 0 0 1.4rem;
+      padding: .35rem; background: rgba(255, 255, 255, 0.85);
+      border: 3px solid #fff; border-radius: 999px;
+      box-shadow: var(--shadow-sm);
+    }
+    .page-tabs button {
+      border: 0; background: transparent; font: inherit; font-weight: 700;
+      padding: .55rem 1.25rem; border-radius: 999px; cursor: pointer;
+      color: var(--soft); transition: all .18s ease;
+    }
+    .page-tabs button[aria-selected="true"] {
+      background: var(--blue); color: #fff;
+      box-shadow: 0 4px 12px rgba(76, 125, 255, 0.35);
+    }
+    .video-lang-tabs { margin: 0; padding: .25rem; }
+    .video-lang-tabs button { padding: .35rem .85rem; font-size: .86rem; }
+
+    .toc { display: flex; flex-wrap: wrap; gap: .45rem; margin: 0 0 1.35rem; }
+    .toc a {
+      font-size: .85rem; font-weight: 700; background: #fff;
+      border: 2px solid var(--line); border-radius: 999px;
+      padding: .3rem .85rem; text-decoration: none; color: var(--soft);
+      box-shadow: var(--shadow-sm);
+    }
+    .toc a:hover { border-color: var(--pink); color: var(--pink); }
+
+    /* Cards & Pastel Bullet Cards */
+    .card {
+      background: var(--surface);
+      border: 4px solid #fff;
+      border-radius: var(--radius-lg);
+      padding: 1.45rem 1.65rem;
+      box-shadow: var(--shadow);
+      margin: 1.2rem 0;
+    }
+    .pastel-grid { display: grid; gap: .85rem; margin: 1rem 0; }
+    .pastel-card {
+      display: flex; align-items: center; gap: 1rem;
+      padding: .95rem 1.2rem; border-radius: var(--radius-md);
+      border: 4px solid #fff; box-shadow: var(--shadow-sm);
+      font-weight: 500; color: var(--ink);
+    }
+    .pastel-card.c0 { background: var(--past-yellow); }
+    .pastel-card.c1 { background: var(--past-green); }
+    .pastel-card.c2 { background: var(--past-blue); }
+    .pastel-card.c3 { background: var(--past-pink); }
+    .pastel-badge {
+      flex: 0 0 44px; width: 44px; height: 44px; border-radius: 50%;
+      display: grid; place-items: center; color: #fff;
+      font-weight: 700; font-size: 1.15rem;
+      border: 3px solid #fff; box-shadow: var(--shadow-sm);
+    }
+    .c0 .pastel-badge { background: var(--yellow); }
+    .c1 .pastel-badge { background: var(--green); }
+    .c2 .pastel-badge { background: var(--blue); }
+    .c3 .pastel-badge { background: var(--pink); }
+
+    /* Lesson Video & Animated SVG Studio Player (#clip) */
+    .video-panel {
+      background: var(--surface);
+      border: 4px solid #fff;
+      border-radius: var(--radius-lg);
+      padding: 1.35rem 1.5rem;
+      box-shadow: var(--shadow);
+      margin: 1.25rem 0 1.75rem;
+    }
+    .lang-row {
+      display: flex; flex-wrap: wrap; gap: .75rem 1.25rem;
+      align-items: center; justify-content: space-between; margin-bottom: .65rem;
+    }
+    .video-caption { font-size: .95rem; color: var(--soft); margin: 0 0 .85rem; font-weight: 600; }
+    .svg-stage-wrap {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 4px solid var(--line);
+      box-shadow: var(--shadow);
+      background: #BFE8FF;
+      aspect-ratio: 16 / 9;
+      width: 100%;
+    }
+    .svg-stage-wrap svg { display: block; width: 100%; height: 100%; }
+    .player-controls {
+      display: flex; flex-wrap: wrap; gap: .65rem; align-items: center;
+      margin-top: .85rem; padding: .65rem .85rem;
+      background: var(--surface-soft); border-radius: var(--radius-md);
+      border: 2px solid var(--line);
+    }
+    .player-scrubber {
+      flex: 1; min-width: 180px; accent-color: var(--pink); cursor: pointer; height: 8px;
+    }
+    .player-time {
+      font-family: var(--mono); font-size: .84rem; font-weight: 700;
+      color: var(--ink); min-width: 6.5rem; text-align: right;
+    }
+    .scene-pills {
+      display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .65rem;
+    }
+    .scene-pill {
+      font-family: var(--font); font-size: .78rem; font-weight: 700;
+      padding: .25rem .65rem; border-radius: 999px;
+      border: 2px solid var(--line); background: #fff; color: var(--soft);
+      cursor: pointer; transition: all .15s ease;
+    }
+    .scene-pill:hover, .scene-pill.active {
+      background: var(--purple); color: #fff; border-color: var(--purple);
+    }
+
+    /* HPWL Meter */
+    .hpwl-meter-card {
+      background: var(--surface);
+      border: 4px solid #fff;
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 1rem;
+    }
+    .hpwl-top {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .5rem;
+    }
+    .hpwl-big { font-size: 1.75rem; font-weight: 700; font-family: var(--mono); color: var(--ink); }
+    .hpwl-track {
+      position: relative; height: 18px; border-radius: 999px;
+      background: #E8EEF9; margin: .65rem 0 .35rem; overflow: visible;
+    }
+    .hpwl-fill {
+      height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #2BBF7E 0%, #FFB300 50%, #FF5C93 100%);
+      transition: width .3s ease;
+    }
+    .hpwl-golden-mark {
+      position: absolute; top: -6px; bottom: -6px; width: 4px;
+      background: var(--ink); border-radius: 4px;
+    }
+    .hpwl-golden-tag {
+      position: absolute; top: -24px; transform: translateX(-50%);
+      font-size: .72rem; font-weight: 700; color: var(--green);
+      background: var(--past-green); padding: 1px 7px; border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    /* Interactive Split Tool & Graph Board */
+    .split {
+      display: grid; grid-template-columns: 1.1fr 1fr; gap: 1.1rem;
+      align-items: stretch;
+    }
+    @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+    .graph {
+      background: var(--surface); border: 4px solid #fff;
+      border-radius: var(--radius-lg); padding: 1rem;
+      box-shadow: var(--shadow);
+      display: grid; place-items: center;
+    }
+    .graph svg { touch-action: none; max-width: 100%; height: auto; }
+    .explain {
+      background: var(--surface); border: 4px solid #fff;
+      border-radius: var(--radius-lg); padding: 1.2rem 1.35rem;
+      box-shadow: var(--shadow);
+    }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: .85rem 0;
+    }
+    .slider-pill {
+      display: inline-flex; align-items: center; gap: .65rem;
+      background: #fff; border: 3px solid var(--line);
+      padding: .45rem 1rem; border-radius: 999px;
+      font-weight: 700; font-size: .9rem; box-shadow: var(--shadow-sm);
+    }
+    .slider-pill input[type="range"] { accent-color: var(--pink); cursor: pointer; }
+
+    pre, .log {
+      font-family: var(--mono); font-size: .84rem;
+      background: #F4F7FE; color: var(--ink);
+      border: 2px solid var(--line); border-radius: var(--radius-md);
+      padding: .95rem 1.1rem; overflow: auto; line-height: 1.55;
+    }
+    code {
+      font-family: var(--mono); font-size: .88em;
+      background: var(--past-blue); color: var(--ink);
+      padding: .12rem .42rem; border-radius: 8px; font-weight: 700;
+    }
+    pre code { background: none; padding: 0; }
+
+    /* Tables */
+    table {
+      width: 100%; border-collapse: collapse; font-size: .95rem;
+      background: var(--surface); border-radius: var(--radius-md);
+      overflow: hidden; box-shadow: var(--shadow-sm); margin: 1rem 0;
+    }
+    th, td { text-align: left; padding: .65rem .9rem; border-bottom: 2px solid var(--line); }
+    th { background: var(--past-blue); color: var(--ink); font-weight: 700; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+
+    /* Walkthrough Panel */
+    .walk-card {
+      background: var(--surface); border: 4px solid #fff;
+      border-radius: var(--radius-lg); overflow: hidden;
+      box-shadow: var(--shadow); margin-top: .85rem;
+    }
+    .walk-banner {
+      padding: .9rem 1.35rem; color: #fff;
+      background: linear-gradient(90deg, var(--blue), var(--purple));
+    }
+    .walk-banner .kicker { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .9; }
+    .walk-banner h3 { margin: .15rem 0; color: #fff; font-size: 1.25rem; }
+    .walk-banner .meta { font-size: .82rem; opacity: .9; }
+    .walk-btn.is-on { background: var(--pink); color: #fff; border-color: #fff; }
+
+    /* Quiz */
+    .quiz-section {
+      margin-top: 2rem; background: var(--surface);
+      border: 4px solid #fff; border-radius: var(--radius-lg);
+      padding: 1.5rem 1.75rem; box-shadow: var(--shadow);
+    }
+    .quiz-item {
+      background: var(--surface-soft); border: 2px solid var(--line);
+      border-radius: var(--radius-md); padding: 1.15rem 1.25rem; margin: 1rem 0;
+    }
+    .quiz-item p.prompt { margin: 0 0 .8rem; font-weight: 700; font-size: 1.02rem; }
+    .quiz-choices { display: grid; gap: .5rem; margin-bottom: .9rem; }
+    .quiz-choices label {
+      display: flex; gap: .65rem; align-items: flex-start;
+      padding: .75rem .95rem; border: 2px solid var(--line);
+      border-radius: var(--radius-sm); background: #fff; cursor: pointer;
+      transition: all .15s ease;
+    }
+    .quiz-choices label:hover, .quiz-choices label:has(input:checked) {
+      border-color: var(--blue); background: var(--past-blue);
+    }
+    .quiz-result {
+      margin-top: .75rem; padding: .8rem 1rem; border-radius: var(--radius-sm);
+      font-size: .92rem; font-weight: 600; display: none;
+    }
+    .quiz-result.show { display: block; }
+    .quiz-result.ok { background: var(--past-green); color: #16794C; }
+    .quiz-result.bad { background: var(--past-pink); color: #A62653; }
+    .quiz-summary {
+      margin-top: 1rem; padding: 1rem 1.25rem;
+      background: var(--past-yellow); color: var(--ink);
+      border-radius: var(--radius-md); font-weight: 700; font-size: 1.08rem;
+      display: none;
+    }
+    .quiz-summary.show { display: block; }
+
+    /* Matching Game & Missions */
+    .match { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem .9rem; }
+    @media (max-width: 760px) { .match { grid-template-columns: 1fr; } }
+    .match-col { display: grid; gap: .6rem; align-content: start; }
+    .match button {
+      text-align: left; font: inherit; font-weight: 600; cursor: pointer;
+      padding: .8rem 1rem; border-radius: var(--radius-sm);
+      border: 3px solid var(--line); background: #fff; color: var(--ink);
+      box-shadow: var(--shadow-sm); transition: all .15s ease;
+    }
+    .match button:hover { border-color: var(--blue); transform: translateY(-1px); }
+    .match button.picked { border-color: var(--blue); background: var(--past-blue); }
+    .match button.ok { border-color: var(--green); background: var(--past-green); color: #16794C; }
+    .match button.bad { border-color: var(--pink); background: var(--past-pink); color: #A62653; }
+    .match button:disabled { cursor: default; transform: none; }
+
+    .status-line { min-height: 1.5em; font-size: .95rem; font-weight: 700; margin: .5rem 0; }
+    .status-line.ok { color: #16794C; }
+    .status-line.bad { color: var(--pink); }
+    .xp {
+      display: inline-block; background: var(--past-yellow); color: #9E6300;
+      padding: .35rem .95rem; border-radius: 999px; border: 3px solid #fff;
+      font-weight: 700; font-size: .92rem; box-shadow: var(--shadow-sm);
+    }
+
+    .cmd { position: relative; }
+    .cmd pre { margin: .45rem 0 0; padding-right: 5.5rem; white-space: pre-wrap; }
+    .cmd .btn { position: absolute; top: .55rem; right: .55rem; padding: .35rem .8rem; font-size: .82rem; }
+    .gold-banner {
+      background: var(--past-green); border: 3px solid #fff; color: #16794C;
+      border-radius: var(--radius-md); padding: .85rem 1.1rem;
+      font-family: var(--mono); font-weight: 700; font-size: .95rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* Decorative green hills footer */
+    .hills-footer {
+      position: relative; z-index: 1;
+      background: linear-gradient(180deg, transparent 0%, var(--hill-light) 35%, var(--hill-dark) 100%);
+      padding: 3rem 1.25rem 2.25rem;
+      margin-top: 2rem;
+    }
+    .site-footer {
+      max-width: var(--max); margin: 0 auto;
+      background: rgba(255, 255, 255, 0.9);
+      border: 3px solid #fff; border-radius: 999px;
+      padding: .85rem 1.5rem; text-align: center;
+      color: var(--ink); font-size: .9rem; font-weight: 600;
+      box-shadow: var(--shadow-sm);
+    }
+    .lab-steps { padding-left: 1.35rem; margin: .25rem 0; }
+    .lab-steps li { margin: .45rem 0; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="ambient-bubbles" aria-hidden="true">
+    <span style="left:6%;width:38px;height:38px;background:#FF9EB5;animation-delay:0s"></span>
+    <span style="left:18%;width:52px;height:52px;background:#FFD23F;animation-delay:4s"></span>
+    <span style="left:34%;width:28px;height:28px;background:#7FD1FF;animation-delay:9s"></span>
+    <span style="left:58%;width:46px;height:46px;background:#B79CFF;animation-delay:2s"></span>
+    <span style="left:76%;width:34px;height:34px;background:#8CE6B0;animation-delay:7s"></span>
+    <span style="left:90%;width:48px;height:48px;background:#FFB07A;animation-delay:12s"></span>
+  </div>
+
+  <a class="skip-link" href="#main" data-i18n="skip">Skip to content</a>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <p class="brand">
+        <a href="#main">
+          <span class="pip-badge" aria-hidden="true">★</span>
+          <span data-i18n="brand">EDA Algorithms Platform</span>
+        </a>
+      </p>
+      <nav class="site-nav" aria-label="Site">
+        <a href="#lab" data-tab-link="lab" class="is-active" data-i18n="lab">Lab</a>
+        <a href="#game" data-tab-link="game" data-i18n="game">Game</a>
+        <a href="#notes" data-tab-link="notes" data-i18n="notes">Course notes</a>
+        <a href="#quiz" data-tab-link="lab" data-i18n="quiz">Quiz</a>
+      </nav>
+      <div class="page-tabs video-lang-tabs" role="tablist" aria-label="Language">
+        <button type="button" role="tab" data-video-lang="en" aria-selected="true">English</button>
+        <button type="button" role="tab" data-video-lang="zh" aria-selected="false">中文</button>
+      </div>
+      <div class="site-search">
+        <label for="site-search-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Search</label>
+        <input id="site-search-input" class="site-search-input" type="search" placeholder="Courses, labs, tools…" autocomplete="off" data-i18n-placeholder="searchPh">
+        <div class="site-search-results" hidden role="listbox"></div>
+      </div>
+    </div>
+    <div class="site-header-crumb">
+      <nav aria-label="Breadcrumb">
+        <a href="#main" data-i18n="home">Home</a>
+        <a href="#main" data-i18n="courses">Courses</a>
+        <a href="#main">learn_placement</a>
+        <span class="here" data-i18n="lab01">Module 2 · Lesson 1</span>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="eyebrow" data-i18n="eyebrow">Module 2 · Lesson 1 · Placement for EDA</div>
+      <h1><span data-i18n="h1a">Force-directed</span> <span class="grad-text" data-i18n="h1b">placement</span></h1>
+      <p class="lead" data-i18n="heroLead">Model wires as Hooke's law springs: pull each cell toward the average position of its neighbors using damped steps new = (1 − α)·old + α·target to shrink HPWL without collapsing the chip.</p>
+      <div class="clip-meta">
+        <span class="pill" data-i18n="labOf">Lesson 01 · Global Placement</span>
+        <span class="pill pill-muted" data-i18n="lab">Lab</span>
+        <span class="pill pill-green" id="done-pill" hidden data-i18n="done">Done</span>
+      </div>
+      <nav class="clip-toolbar" aria-label="Lab actions">
+        <button type="button" class="btn btn-secondary" data-tab-link="game" data-i18n="game">Game</button>
+        <button type="button" class="btn btn-secondary" data-tab-link="notes" data-i18n="notes">Course notes</button>
+        <a class="btn btn-primary" href="#tool" data-tab-link="lab" data-i18n="openTool">Open tool</a>
+        <a class="btn btn-ghost" href="#quiz" data-tab-link="lab" data-i18n="jumpQuiz">Jump to quiz</a>
+        <button type="button" class="btn btn-secondary" id="mark-done" data-i18n="markDone">Mark lab done</button>
+      </nav>
+    </section>
+
+    <div class="page-tabs" role="tablist" aria-label="Lab, game, or course notes">
+      <button type="button" role="tab" id="tab-lab" aria-controls="panel-lab" aria-selected="true" data-tab="lab" data-i18n="lab">Lab</button>
+      <button type="button" role="tab" id="tab-game" aria-controls="panel-game" aria-selected="false" data-tab="game" data-i18n="game">Game</button>
+      <button type="button" role="tab" id="tab-notes" aria-controls="panel-notes" aria-selected="false" data-tab="notes" data-i18n="notes">Course notes</button>
+    </div>
+
+    <!-- ==================== TAB 1: LAB ==================== -->
+    <div id="panel-lab" role="tabpanel" aria-labelledby="tab-lab">
+      <nav class="toc" aria-label="On this lab">
+        <a href="#steps" data-i18n="whatToDo">What to do</a>
+        <a href="#clip" data-i18n="video">Lesson Video</a>
+        <a href="#tool" data-i18n="tool">Browser tool</a>
+        <a href="#quiz" data-i18n="quiz">Quiz</a>
+      </nav>
+
+      <!-- Simplified bullet-point What to do above the video -->
+      <h2 id="steps" style="margin-top:.5rem" data-i18n="whatToDo">What to do</h2>
+      <div class="card">
+        <ul class="lab-steps">
+          <li data-i18n-html="step1">Watch the lesson video below or review formulas in <button type="button" class="btn-link" data-tab-link="notes">Course notes</button>.</li>
+          <li data-i18n-html="step2">Adjust damping <code>α</code> and corner anchors in the <a href="#tool">Browser tool</a> to shrink HPWL toward <strong>14</strong>.</li>
+          <li data-i18n-html="step3">Solve the matching challenge and 3 layout missions in the <button type="button" class="btn-link" data-tab-link="game">Game</button> tab.</li>
+          <li data-i18n-html="step4">Score 6/6 on the <a href="#quiz">Quiz</a> below.</li>
+        </ul>
+      </div>
+
+      <!-- Rendered MP4 Lesson Video with Automatic Interactive 1920x1080 SVG Fallback -->
+      <section class="video-panel" id="clip" aria-label="Lesson video">
+        <div class="lang-row">
+          <p class="lead" style="margin:0;color:var(--ink);font-weight:700" data-i18n="watchLang">
+            Lesson Video · Force Directed Placement
+          </p>
+          <div class="page-tabs video-lang-tabs" role="tablist" aria-label="Language">
+            <button type="button" role="tab" data-video-lang="en" aria-selected="true">English</button>
+            <button type="button" role="tab" data-video-lang="zh" aria-selected="false">中文</button>
+          </div>
+        </div>
+        <p class="video-caption" id="video-caption" data-i18n="vidCap">
+          Watch how Hooke's law springs, neighbor pull, center pull, and fixed pads shrink HPWL from 52.0 → 34.5 → 18.7.
+        </p>
+
+        <!-- Rendered MP4 Player -->
+        <div id="mp4-wrap">
+          <video id="lab-video" controls preload="metadata" playsinline
+                 style="width:100%;border-radius:24px;border:4px solid var(--line);box-shadow:var(--shadow);background:#000">
+            <source id="lab-video-src" src="force_directed_formal_synced.mp4" type="video/mp4">
+          </video>
+        </div>
+
+        <!-- Automatic Interactive SVG Fallback if MP4 is unavailable -->
+        <div id="svg-fallback-wrap" hidden>
+          <div class="svg-stage-wrap">
+            <svg id="lesson-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"></svg>
+          </div>
+          <div class="player-controls">
+            <button type="button" class="btn btn-pink" id="anim-play">▶ Play</button>
+            <button type="button" class="btn btn-secondary" id="anim-reset">↺ Restart</button>
+            <input type="range" class="player-scrubber" id="anim-scrub" min="0" max="176" step="0.1" value="1.8" aria-label="Lesson timeline">
+            <button type="button" class="btn btn-ghost" id="anim-speed">1.0×</button>
+            <span class="player-time" id="anim-time">0:02 / 2:56</span>
+          </div>
+          <div class="scene-pills" id="scene-pills"></div>
+        </div>
+      </section>
+
+      <h2 id="tool" data-i18n="browserTool">Browser tool</h2>
+      <p class="lead" data-i18n="toolLead">Six-cell netlist (A–F, 8 wires). Load the spread-out starter (HPWL 52), tune α, step one relaxation round at a time, or drag cells on the 0.5-unit grid. Check your layout against the golden target without collapsing!</p>
+
+      <div class="hpwl-meter-card">
+        <div class="hpwl-top">
+          <div>
+            <strong data-i18n="hpwlLabel">HPWL (Half-Perimeter Wirelength)</strong>
+            <span style="color:var(--soft);font-size:.88rem;margin-left:.5rem" id="tool-spacing-badge">min spacing: 0.85</span>
+          </div>
+          <div class="hpwl-big" id="tool-hpwl-num">52.0</div>
+        </div>
+        <div class="hpwl-track">
+          <div class="hpwl-fill" id="tool-hpwl-bar" style="width:92%"></div>
+          <div class="hpwl-golden-mark" style="left:25%">
+            <span class="hpwl-golden-tag" data-i18n="goldenTag">golden 14</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--soft);font-weight:600">
+          <span>0</span>
+          <span data-i18n="compactZone">compact sweet spot (13–18)</span>
+          <span>56</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button type="button" class="btn btn-primary" id="load-starter" data-i18n="loadStarter">Load starter (P0)</button>
+        <button type="button" class="btn btn-pink" id="step-force" data-i18n="stepRound">Step 1 round</button>
+        <button type="button" class="btn btn-green" id="run-force" data-i18n="runConverge">Run relaxation</button>
+        <button type="button" class="btn btn-secondary" data-preset="golden" data-i18n="goldenPreset">Golden (P3)</button>
+        <button type="button" class="btn btn-secondary" data-preset="collapsed" data-i18n="collapsePreset">Pitfall: collapsed</button>
+      </div>
+
+      <div class="controls">
+        <label class="slider-pill">
+          <span>α = <strong id="alpha-val">0.50</strong></span>
+          <input type="range" id="alpha-slider" min="0.05" max="1.00" step="0.05" value="0.50">
+          <span id="alpha-hint" style="color:var(--green);font-size:.82rem">just right</span>
+        </label>
+        <label class="slider-pill" style="cursor:pointer">
+          <input type="checkbox" id="anchor-toggle" checked style="accent-color:var(--blue);width:17px;height:17px">
+          <span data-i18n="anchorLbl">Anchor corner pads A & C</span>
+        </label>
+        <button type="button" class="btn btn-primary" id="check-placement" data-i18n="checkPlacement">Check placement</button>
+      </div>
+
+      <p class="status-line" id="tool-status"></p>
+
+      <div class="split">
+        <div class="graph" id="tool-graph"></div>
+        <div class="explain">
+          <h3 style="margin-top:0" data-i18n="runLog">Relaxation log & coordinates</h3>
+          <pre class="log" id="tool-log" style="min-height:19rem"></pre>
+        </div>
+      </div>
+
+      <section id="quiz" class="quiz-section">
+        <h2 style="margin-top:0" data-i18n="quizTitle">Force-directed check</h2>
+        <p class="lead" data-i18n-html="quizLead">Six questions from the <button type="button" class="btn-link" data-tab-link="notes">Course notes</button> (Hooke's law springs, barycenter target, damping α, HPWL, and collapse pitfalls).</p>
+        <div id="quiz-root"></div>
+        <div class="quiz-summary" data-role="summary"></div>
+        <div class="quiz-actions" style="margin-top:1rem">
+          <button type="button" class="btn btn-primary" id="score-quiz" data-i18n="scoreQuiz">Score quiz</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ==================== TAB 2: GAME ==================== -->
+    <div id="panel-game" role="tabpanel" aria-labelledby="tab-game" hidden>
+      <nav class="toc" aria-label="On this game">
+        <a href="#games" data-i18n="playLogic">Play the logic</a>
+        <a href="#missions" data-i18n="missions">Real-life missions</a>
+      </nav>
+      <p class="lead" data-i18n="gameLead">Match force-directed placement terms to their rules, then solve three real-life layout missions by tuning damping α and relaxing the 6-node network without collapsing cells on top of each other.</p>
+      <p class="xp" id="xp-line">Missions solved: 0 / 3</p>
+
+      <h2 id="games" data-i18n="playLogic">Play the logic</h2>
+      <div class="card">
+        <h3 style="margin-top:0" data-i18n="matchTitle">Match: spring placement term → rule</h3>
+        <p data-i18n="matchHint">Click a term on the left, then its matching definition on the right.</p>
+        <div class="match" id="match-rules"></div>
+        <p class="status-line" id="match-rules-status"></p>
+        <button type="button" class="btn btn-ghost" data-reset-match="rules" data-i18n="resetGame">Reset this game</button>
+      </div>
+
+      <h2 id="missions" data-i18n="missions">Real-life missions</h2>
+      <p data-i18n="missionHelp">For each scenario, adjust α and press Step / Relax (or drag nodes directly on the grid) until HPWL meets the target AND cells keep safe spacing without collapsing!</p>
+      <div id="mission-root"></div>
+    </div>
+
+    <!-- ==================== TAB 3: COURSE NOTES ==================== -->
+    <div id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" hidden>
+      <nav class="toc" aria-label="Course notes">
+        <a href="#terms" data-i18n="terms">Terminology</a>
+        <a href="#rules" data-i18n="rules">Rules</a>
+        <a href="#walk" data-i18n="walk">Walkthrough</a>
+        <a href="#implement" data-i18n="implement">Implement</a>
+        <a href="#pitfalls" data-i18n="pitfalls">Pitfalls</a>
+      </nav>
+
+      <h2 id="terms" data-i18n="terms">Terminology</h2>
+      <p class="lead" data-i18n="termsLead">Key placement terms used across the lesson; the 中文 switch updates every section.</p>
+      <table>
+        <tr><th data-i18n="thEn">English</th><th data-i18n="thZh">中文</th></tr>
+        <tr><td>Force-directed placement</td><td>力导向布局</td></tr>
+        <tr><td>Hooke's law spring model</td><td>胡克定律弹簧模型</td></tr>
+        <tr><td>Target barycenter (neighbor average)</td><td>目标重心（邻居平均位置）</td></tr>
+        <tr><td>Damping factor α</td><td>阻尼系数 α</td></tr>
+        <tr><td>Half-Perimeter Wirelength (HPWL)</td><td>半周长线长（HPWL）</td></tr>
+        <tr><td>Wire box (bounding box)</td><td>线框（包围盒）</td></tr>
+        <tr><td>Layout collapse (pile-up)</td><td>布局坍缩（堆叠）</td></tr>
+        <tr><td>Corner anchors / spreading forces</td><td>角落锚点 / 扩散力</td></tr>
+      </table>
+
+      <h2 id="rules" data-i18n="mustDo">What the student must do</h2>
+      <p data-i18n-html="mustDoP">Treat every wire as an elastic spring pulling connected cells closer. Compute each movable cell's <strong>target barycenter</strong> from its neighbors, blend it with the old coordinate using damping <code>α</code>, and report <strong>HPWL</strong> alongside <strong>minimum spacing</strong> so cells shrink wirelength without piling onto one point.</p>
+
+      <div class="pastel-grid">
+        <div class="pastel-card c0"><span class="pastel-badge">1</span><span data-i18n-html="bCard1"><strong>Hooke's law:</strong> Every wire pulls connected cells together like a gentle spring; longer wires pull harder.</span></div>
+        <div class="pastel-card c1"><span class="pastel-badge">2</span><span data-i18n-html="bCard2"><strong>Target barycenter:</strong> A cell's zero-force target is the average <code>(x, y)</code> of its connected neighbors.</span></div>
+        <div class="pastel-card c2"><span class="pastel-badge">3</span><span data-i18n-html="bCard3"><strong>Damped step:</strong> Move part-way each round with <code>new = (1 − α)·old + α·target</code> (sweet spot <code>α ≈ 0.5</code>).</span></div>
+        <div class="pastel-card c3"><span class="pastel-badge">4</span><span data-i18n-html="bCard4"><strong>Prevent collapse:</strong> Keep corner I/O anchors or spreading forces so cells pack tightly instead of collapsing to one dot.</span></div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0" data-i18n="rulesLock">Rules & equations (lock these)</h3>
+        <table>
+          <tr><th data-i18n="thSignal">Concept</th><th data-i18n="thRule">Formula / Rule</th></tr>
+          <tr><td>Spring force</td><td><code>F_i = Σ_{j ∈ N(i)} w_{ij} (x_j − x_i)</code> (zero when <code>x_i = target_i</code>)</td></tr>
+          <tr><td>Target position</td><td><code>target_i = (Σ_{j ∈ N(i)} w_{ij} x_j) / (Σ_{j ∈ N(i)} w_{ij})</code></td></tr>
+          <tr><td>Damped update</td><td><code>x_i^{(k+1)} = (1 − α)·x_i^{(k)} + α·target_i^{(k)}</code>, <code>0 < α ≤ 1</code></td></tr>
+          <tr><td>HPWL metric</td><td><code>HPWL = Σ_{e} (max x − min x + max y − min y)</code></td></tr>
+          <tr><td>Golden target</td><td><code>HPWL ≈ 14.0</code> (down from <code>52.0</code>) with safe cell separation</td></tr>
+        </table>
+      </div>
+
+      <table>
+        <tr><th>Wire (Edge)</th><th>Endpoints</th><th class="num">Initial Length (P0)</th><th class="num">Golden Length (P3)</th></tr>
+        <tr><td>e1</td><td>A – B</td><td class="num">7.20</td><td class="num">1.75</td></tr>
+        <tr><td>e2</td><td>A – F</td><td class="num">7.00</td><td class="num">1.65</td></tr>
+        <tr><td>e3</td><td>F – C</td><td class="num">7.00</td><td class="num">1.65</td></tr>
+        <tr><td>e4</td><td>F – E</td><td class="num">7.00</td><td class="num">1.65</td></tr>
+        <tr><td>e5</td><td>A – E</td><td class="num">6.80</td><td class="num">1.75</td></tr>
+        <tr><td>e6</td><td>E – D</td><td class="num">10.60</td><td class="num">2.95</td></tr>
+        <tr><td>e7</td><td>C – D</td><td class="num">3.20</td><td class="num">1.30</td></tr>
+        <tr><td>e8</td><td>B – D</td><td class="num">3.20</td><td class="num">1.30</td></tr>
+        <tr><td><strong>Total HPWL</strong></td><td><strong>8 wires</strong></td><td class="num"><strong>52.00</strong></td><td class="num"><strong>14.00</strong></td></tr>
+      </table>
+
+      <h2 id="walk" data-i18n="walkH">Walkthrough — Target, damping, relaxation</h2>
+      <p class="lead" data-i18n="walkLead">Step through the five stages on the 6-cell netlist (A–F) and watch the dashed orange wire box shrink.</p>
+      <div class="controls">
+        <button type="button" class="btn btn-secondary walk-btn" data-walk="0">1 · Initial spread (P0)</button>
+        <button type="button" class="btn btn-secondary walk-btn" data-walk="1">2 · Neighbor barycenter</button>
+        <button type="button" class="btn btn-secondary walk-btn" data-walk="2">3 · Damped step (P1)</button>
+        <button type="button" class="btn btn-secondary walk-btn" data-walk="3">4 · Golden HPWL 14 (P3)</button>
+        <button type="button" class="btn btn-secondary walk-btn" data-walk="4">5 · α dial & collapse</button>
+      </div>
+      <div id="walk-panel"></div>
+
+      <h2 id="implement" data-i18n="implementH">Implement track</h2>
+      <p class="lead" data-i18n="implLead">Write the force-directed relaxation loop yourself and verify against the starter goldens.</p>
+
+      <div class="card">
+        <h3 style="margin-top:0">1. What “done” looks like</h3>
+        <p>Run damped force-directed relaxation on the 6-cell starter netlist with <code>α = 0.50</code> and corner I/O anchors. Total HPWL drops from <strong>52.0</strong> to <strong>14.0</strong> while cells remain well separated.</p>
+        <p class="gold-banner">hpwl=14.0  min_spacing=0.35  alpha=0.50  rounds=6</p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">2. What you re-implement</h3>
+        <ol class="lab-steps">
+          <li>Read cell coordinates, adjacency list (8 wires), and fixed/anchored pad flags.</li>
+          <li>For each movable cell <code>i</code>, compute the weighted average <code>target_i</code> of its neighbors.</li>
+          <li>Update synchronously: <code>pos[i] = (1 - alpha) * pos[i] + alpha * target_i</code>.</li>
+          <li>Compute Half-Perimeter Wirelength (HPWL) using the exact same net model before and after.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">3. Run & inspect the reference script</h3>
+        <div class="cmd">
+          <button type="button" class="btn btn-ghost" data-copy="python3 force_directed_place.py">Copy</button>
+          <pre><code>python3 force_directed_place.py</code></pre>
+        </div>
+
+        <div class="controls" style="margin-top:1rem">
+          <a class="btn btn-primary" href="force_directed_place.py" download>Download force_directed_place.py</a>
+          <a class="btn btn-secondary" href="README.md" download>README.md</a>
+          <a class="btn btn-secondary" href="SCRIPT.md" download>SCRIPT.md</a>
+          <a class="btn btn-secondary" href="DESIGN.md" download>DESIGN.md</a>
+        </div>
+
+        <details style="margin-top:.85rem">
+          <summary style="cursor:pointer;font-weight:700;color:var(--blue)">View force_directed_place.py source</summary>
+          <pre id="py-source-box" style="margin-top:.6rem;max-height:22rem">Loading force_directed_place.py…</pre>
+        </details>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">4. Goldens to match</h3>
+        <table>
+          <tr><th>Scenario</th><th>Expected metrics</th><th></th></tr>
+          <tr>
+            <td>Starter spread (<code>P0</code>, 0 rounds)</td>
+            <td><code>HPWL = 52.0</code>, wide wire box</td>
+            <td><button type="button" class="btn btn-secondary" data-run-preset="starter">Run in lab tool</button></td>
+          </tr>
+          <tr>
+            <td>Anchored relaxation (<code>α = 0.50</code>, <code>P3</code>)</td>
+            <td><code>HPWL = 14.0</code>, compact without pile-up</td>
+            <td><button type="button" class="btn btn-secondary" data-run-preset="golden">Run in lab tool</button></td>
+          </tr>
+          <tr>
+            <td>Unanchored over-step (<code>α = 1.00</code>, <code>PC</code>)</td>
+            <td><code>HPWL → 0.4</code>, <strong>collapsed pile-up!</strong></td>
+            <td><button type="button" class="btn btn-secondary" data-run-preset="collapsed">Run in lab tool</button></td>
+          </tr>
+        </table>
+      </div>
+
+      <h2 id="pitfalls" data-i18n="pitfallsH">Pitfalls to watch</h2>
+      <div class="pastel-grid">
+        <div class="pastel-card c0"><span class="pastel-badge">!</span><span><strong>α too small (e.g. α = 0.05):</strong> Cells barely budge per round, wasting runtime before wires shrink.</span></div>
+        <div class="pastel-card c3"><span class="pastel-badge">!</span><span><strong>α too big without anchors (e.g. α = 1.0):</strong> Cells overshoot and collapse into an illegal pile-up at the center.</span></div>
+        <div class="pastel-card c2"><span class="pastel-badge">!</span><span><strong>Changing net models mid-check:</strong> Always evaluate before (52.0) and after (18.7 / 14.0) HPWL with the exact same net model.</span></div>
+      </div>
+      <p class="lead">90-minute flow: Spring intuition (0–15) → walkthrough (15–35) → browser tool (35–60) → implement (60–80) → quiz (80–90).</p>
+    </div>
+  </main>
+
+  <div class="hills-footer">
+    <footer class="site-footer" data-i18n="footer">
+      EDA Algorithms Platform · Module 2 Lesson 1: Force-directed placement · Progress saved in this browser only.
+    </footer>
+  </div>
+
+<script>
+/* ==========================================================================
+   1. BILINGUAL I18N DICTIONARY (EN / ZH)
+   ========================================================================== */
+let currentLang = "en";
+const I18N = {
+  en: {
+    skip: "Skip to content",
+    brand: "EDA Algorithms Platform",
+    lab: "Lab",
+    game: "Game",
+    notes: "Course notes",
+    quiz: "Quiz",
+    searchPh: "Courses, labs, tools…",
+    home: "Home",
+    courses: "Courses",
+    lab01: "Module 2 · Lesson 1",
+    eyebrow: "Module 2 · Lesson 1 · Placement for EDA",
+    h1a: "Force-directed",
+    h1b: "placement",
+    heroLead: "Model wires as Hooke's law springs: pull each cell toward the average position of its neighbors using damped steps new = (1 − α)·old + α·target to shrink HPWL without collapsing the chip.",
+    labOf: "Lesson 01 · Global Placement",
+    done: "Done",
+    openTool: "Open tool",
+    jumpQuiz: "Jump to quiz",
+    markDone: "Mark lab done",
+    markDoneOn: "✓ Lab marked done",
+    video: "Lesson Video",
+    whatToDo: "What to do",
+    tool: "Browser tool",
+    watchLang: "Lesson Video · Module 2 Lesson 1",
+    vidCap: "Watch how Hooke's law springs, neighbor pull, center pull, and fixed pads shrink HPWL from 52.0 → 34.5 → 18.7.",
+    step1: "Watch the lesson video below or review formulas in <button type=\"button\" class=\"btn-link\" data-tab-link=\"notes\">Course notes</button>.",
+    step2: "Adjust damping <code>α</code> and corner anchors in the <a href=\"#tool\">Browser tool</a> to shrink HPWL toward <strong>14</strong>.",
+    step3: "Solve the matching challenge and 3 layout missions in the <button type=\"button\" class=\"btn-link\" data-tab-link=\"game\">Game</button> tab.",
+    step4: "Score 6/6 on the <a href=\"#quiz\">Quiz</a> below.",
+    browserTool: "Browser tool",
+    toolLead: "Six-cell netlist (A–F, 8 wires). Load the spread-out starter (HPWL 52), tune α, step one relaxation round at a time, or drag cells on the 0.5-unit grid. Check your layout against the golden target without collapsing!",
+    hpwlLabel: "HPWL (Half-Perimeter Wirelength)",
+    goldenTag: "golden 14",
+    compactZone: "compact sweet spot (13–18)",
+    loadStarter: "Load starter (P0)",
+    stepRound: "Step 1 round",
+    runConverge: "Run relaxation",
+    goldenPreset: "Golden (P3)",
+    collapsePreset: "Pitfall: collapsed",
+    anchorLbl: "Anchor corner pads A & C",
+    checkPlacement: "Check placement",
+    runLog: "Relaxation log & coordinates",
+    quizTitle: "Force-directed check",
+    quizLead: "Six questions from the <button type=\"button\" class=\"btn-link\" data-tab-link=\"notes\">Course notes</button> (Hooke's law springs, barycenter target, damping α, HPWL, and collapse pitfalls).",
+    scoreQuiz: "Score quiz",
+    playLogic: "Play the logic",
+    missions: "Real-life missions",
+    gameLead: "Match force-directed placement terms to their rules, then solve three real-life layout missions by tuning damping α and relaxing the 6-node network without collapsing cells on top of each other.",
+    matchTitle: "Match: spring placement term → rule",
+    matchHint: "Click a term on the left, then its matching definition on the right.",
+    resetGame: "Reset this game",
+    missionHelp: "For each scenario, adjust α and press Step / Relax (or drag nodes directly on the grid) until HPWL meets the target AND cells keep safe spacing without collapsing!",
+    terms: "Terminology",
+    rules: "Rules",
+    walk: "Walkthrough",
+    implement: "Implement",
+    pitfalls: "Pitfalls",
+    termsLead: "Key placement terms used across the lesson; the 中文 switch updates every section.",
+    thEn: "English",
+    thZh: "中文",
+    mustDo: "What the student must do",
+    mustDoP: "Treat every wire as an elastic spring pulling connected cells closer. Compute each movable cell's <strong>target barycenter</strong> from its neighbors, blend it with the old coordinate using damping <code>α</code>, and report <strong>HPWL</strong> alongside <strong>minimum spacing</strong> so cells shrink wirelength without piling onto one point.",
+    rulesLock: "Rules & equations (lock these)",
+    thSignal: "Concept",
+    thRule: "Formula / Rule",
+    walkH: "Walkthrough — Target, damping, relaxation",
+    walkLead: "Step through the five stages on the 6-cell netlist (A–F) and watch the dashed orange wire box shrink.",
+    implementH: "Implement track",
+    implLead: "Write the force-directed relaxation loop yourself and verify against the starter goldens.",
+    pitfallsH: "Pitfalls to watch",
+    footer: "EDA Algorithms Platform · Module 2 Lesson 1: Force-directed placement · Progress saved in this browser only."
+  },
+  zh: {
+    skip: "跳转到正文",
+    brand: "EDA 算法学习平台",
+    lab: "实验",
+    game: "闯关游戏",
+    notes: "课程笔记",
+    quiz: "随堂测验",
+    searchPh: "搜索课程、实验、工具…",
+    home: "首页",
+    courses: "课程",
+    lab01: "第 2 章 · 第 1 课",
+    eyebrow: "第 2 章 · 第 1 课 · EDA 布局算法",
+    h1a: "力导向",
+    h1b: "布局",
+    heroLead: "把连线看作胡克定律弹簧：用阻尼步长 new = (1 − α)·old + α·target 把单元拉向邻居的平均位置，在不发生布局坍缩的前提下缩短半周长线长（HPWL）。",
+    labOf: "第 01 课 · 全局布局",
+    done: "已完成",
+    openTool: "打开工具",
+    jumpQuiz: "跳到测验",
+    markDone: "标记实验完成",
+    markDoneOn: "✓ 已标记完成",
+    video: "教学视频",
+    whatToDo: "实验步骤",
+    tool: "浏览器交互工具",
+    watchLang: "教学视频 · 第 2 章第 1 课",
+    vidCap: "观看胡克定律弹簧、邻居重心与阻尼系数 α 如何将相连单元拉向紧凑布局（HPWL 52.0 → 34.5 → 18.7）。",
+    step1: "观看下方教学视频，或在 <button type=\"button\" class=\"btn-link\" data-tab-link=\"notes\">课程笔记</button> 中查阅核心公式。",
+    step2: "在 <a href=\"#tool\">浏览器交互工具</a> 中调节阻尼 <code>α</code> 与角落锚点，将 HPWL 缩小至 <strong>14</strong>。",
+    step3: "前往 <button type=\"button\" class=\"btn-link\" data-tab-link=\"game\">闯关游戏</button> 标签页完成术语配对与 3 个真实布局任务。",
+    step4: "完成文末 6 道 <a href=\"#quiz\">随堂测验</a> 题。",
+    browserTool: "浏览器交互工具",
+    toolLead: "六单元网表（A–F，8 条连线）。加载初始分散布局（HPWL 52），调节 α、单步松弛或在 0.5 网格上直接拖动单元，检查是否达到紧凑目标且未坍缩！",
+    hpwlLabel: "HPWL（半周长线长）",
+    goldenTag: "标准目标 14",
+    compactZone: "紧凑甜蜜区 (13–18)",
+    loadStarter: "加载初始布局 (P0)",
+    stepRound: "单步迭代 1 轮",
+    runConverge: "运行松弛收敛",
+    goldenPreset: "标准答案 (P3)",
+    collapsePreset: "易错点：布局坍缩",
+    anchorLbl: "锚定角落焊盘 A 和 C",
+    checkPlacement: "检查当前布局",
+    runLog: "松弛迭代日志与坐标",
+    quizTitle: "力导向布局自测",
+    quizLead: "来自 <button type=\"button\" class=\"btn-link\" data-tab-link=\"notes\">课程笔记</button> 的六道题目（胡克弹簧、重心目标、阻尼 α、HPWL 与坍缩陷阱）。",
+    scoreQuiz: "提交评分",
+    playLogic: "概念配对",
+    missions: "真实布局任务",
+    gameLead: "将力导向布局术语与规则配对，然后通过调节阻尼 α 和松弛迭代完成三个真实布局任务，避免单元堆叠坍缩。",
+    matchTitle: "配对：力导向术语 → 规则定义",
+    matchHint: "先点击左侧术语，再点击右侧对应规则。",
+    resetGame: "重置配对游戏",
+    missionHelp: "在每个场景中调节 α 并点击单步/松弛（或直接拖动节点），使 HPWL 达标且单元保持安全间距！",
+    terms: "核心术语",
+    rules: "核心规则",
+    walk: "五步走查",
+    implement: "代码实现",
+    pitfalls: "常见陷阱",
+    termsLead: "本课核心布局术语对照；右上角中英文切换会同步更新全站。",
+    thEn: "English",
+    thZh: "中文",
+    mustDo: "实验目标与要求",
+    mustDoP: "将每条连线视为拉近相连单元的弹性弹簧。根据邻居计算每个可移动单元的<strong>目标重心</strong>，用阻尼系数 <code>α</code> 与旧坐标混合更新，并同时报告 <strong>HPWL</strong> 与<strong>最小间距</strong>，确保缩短线长而不会堆叠成一个点。",
+    rulesLock: "公式与规则（牢记）",
+    thSignal: "概念",
+    thRule: "公式 / 规则",
+    walkH: "五步走查 — 目标重心、阻尼与松弛",
+    walkLead: "在 6 单元网表（A–F）上逐步观察橙色虚线线框如何随力导向松弛而收缩。",
+    implementH: "代码实现轨道",
+    implLead: "动手编写力导向松弛循环，并与标准输出对比验证。",
+    pitfallsH: "常见易错点",
+    footer: "EDA 算法学习平台 · 第 2 章第 1 课：力导向布局 · 学习进度仅保存在当前浏览器。"
+  }
+};
+
+function t(k) { return (I18N[currentLang] && I18N[currentLang][k]) || I18N.en[k] || k; }
+function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const v = t(el.dataset.i18n);
+    if (v) el.textContent = v;
+  });
+  document.querySelectorAll("[data-i18n-html]").forEach(el => {
+    const v = t(el.dataset.i18nHtml);
+    if (v) el.innerHTML = v;
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    const v = t(el.dataset.i18nPlaceholder);
+    if (v) el.placeholder = v;
+  });
+}
+
+/* ==========================================================================
+   2. LOCAL MEDIA & REFERENCE PYTHON SOURCE LOADER
+   ========================================================================== */
+const labVideo = document.getElementById("lab-video");
+const labVideoSrc = document.getElementById("lab-video-src");
+const mp4Wrap = document.getElementById("mp4-wrap");
+const svgFallbackWrap = document.getElementById("svg-fallback-wrap");
+
+function syncLessonVideo(lang) {
+  if (!labVideo || !labVideoSrc) return;
+  const file = lang === "zh" ? "media/force-directed-zh.mp4" : "media/force-directed-en.mp4";
+  mp4Wrap.hidden = false;
+  svgFallbackWrap.hidden = true;
+  labVideoSrc.src = file;
+  labVideo.load();
+}
+
+if (labVideo) {
+  labVideo.addEventListener("error", () => {
+    mp4Wrap.hidden = true;
+    svgFallbackWrap.hidden = false;
+  }, true);
+}
+
+fetch("force_directed_place.py")
+  .then(r => r.ok ? r.text() : Promise.reject())
+  .then(code => { document.getElementById("py-source-box").textContent = code; })
+  .catch(() => { document.getElementById("py-source-box").textContent = "Serve over http://localhost:8000 to preview force_directed_place.py."; });
+
+/* ==========================================================================
+   3. SHARED GRAPH MODEL (6 CELLS A-F, 8 WIRES, UNIT COORDS [0, 2] x [0, 2])
+   ========================================================================== */
+const CELLS = ["A", "B", "C", "D", "E", "F"];
+const CELL_COL = {
+  A: "#00B8A9",
+  B: "#FF7A3D",
+  C: "#3D7BFF",
+  D: "#9B5DFF",
+  E: "#FFC21A",
+  F: "#3CCB6A"
+};
+const WIRES = [
+  ["A", "B"], ["A", "F"], ["F", "C"], ["F", "E"],
+  ["A", "E"], ["E", "D"], ["C", "D"], ["B", "D"]
+];
+const ADJ = {
+  A: ["B", "F", "E"],
+  B: ["A", "D"],
+  C: ["F", "D"],
+  D: ["E", "C", "B"],
+  E: ["F", "A", "D"],
+  F: ["A", "C", "E"]
+};
+
+const STAGES = {
+  P0: { A:[0.10,0.15], B:[1.90,0.15], C:[1.90,1.85], D:[1.90,1.00], E:[0.10,1.85], F:[1.00,1.00] },
+  P1: { A:[0.55,0.58], B:[1.45,0.36], C:[1.68,1.42], D:[1.60,1.14], E:[0.55,1.28], F:[0.85,1.14] },
+  P2: { A:[0.55,0.55], B:[1.22,0.52], C:[1.45,1.45], D:[1.48,0.98], E:[0.62,1.32], F:[0.98,0.98] },
+  P3: { A:[0.55,0.55], B:[1.28,0.52], C:[1.45,1.45], D:[1.52,0.98], E:[0.62,1.35], F:[1.00,1.00] },
+  PC: { A:[0.98,0.98], B:[1.01,0.97], C:[1.02,1.02], D:[1.03,1.00], E:[0.97,1.02], F:[1.00,1.00] }
+};
+const ANCHOR_POS = { A:[0.55, 0.55], C:[1.45, 1.45] };
+
+function clonePos(p) {
+  const out = {};
+  for (const k of CELLS) out[k] = [p[k][0], p[k][1]];
+  return out;
+}
+function computeHPWL(pos) {
+  let sum = 0;
+  for (const [u, v] of WIRES) {
+    sum += Math.abs(pos[u][0] - pos[v][0]) + Math.abs(pos[u][1] - pos[v][1]);
+  }
+  return +(sum * 3.97).toFixed(1);
+}
+function minSpacing(pos) {
+  let dMin = Infinity;
+  for (let i = 0; i < CELLS.length; i++) {
+    for (let j = i + 1; j < CELLS.length; j++) {
+      const a = pos[CELLS[i]], b = pos[CELLS[j]];
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (d < dMin) dMin = d;
+    }
+  }
+  return +dMin.toFixed(2);
+}
+function barycenter(pos, node) {
+  const nb = ADJ[node];
+  let sx = 0, sy = 0;
+  for (const v of nb) { sx += pos[v][0]; sy += pos[v][1]; }
+  return [sx / nb.length, sy / nb.length];
+}
+function stepRelaxation(pos, alpha, anchored) {
+  const next = {};
+  for (const n of CELLS) {
+    if (anchored && ANCHOR_POS[n]) {
+      next[n] = [ANCHOR_POS[n][0], ANCHOR_POS[n][1]];
+      continue;
+    }
+    const [tx, ty] = barycenter(pos, n);
+    next[n] = [
+      (1 - alpha) * pos[n][0] + alpha * tx,
+      (1 - alpha) * pos[n][1] + alpha * ty
+    ];
+  }
+  return next;
+}
+
+/* ==========================================================================
+   4. INTERACTIVE GRAPH BOARD COMPONENT
+   ========================================================================== */
+function renderInteractiveBoard(pos, prevPos, opts = {}) {
+  const W = 440, H = 370, padL = 52, padT = 34, size = 290;
+  const toX = u => padL + (u / 2) * size;
+  const toY = v => padT + ((2 - v) / 2) * size;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Force-directed placement board">`;
+  svg += `<rect x="${padL-10}" y="${padT-10}" width="${size+20}" height="${size+20}" rx="18" fill="#FFF9E6" stroke="#1F2A5A" stroke-width="3.5"/>`;
+
+  for (let g = 0; g <= 4; g++) {
+    const u = g * 0.5;
+    const gx = toX(u), gy = toY(u);
+    if (g > 0 && g < 4) {
+      svg += `<line x1="${gx}" y1="${padT}" x2="${gx}" y2="${padT+size}" stroke="#EADDB8" stroke-width="2"/>`;
+      svg += `<line x1="${padL}" y1="${gy}" x2="${padL+size}" y2="${gy}" stroke="#EADDB8" stroke-width="2"/>`;
+    }
+    svg += `<text x="${gx}" y="${padT+size+26}" font-size="12" font-weight="600" fill="#6B7AA8" text-anchor="middle">${u.toFixed(1)}</text>`;
+    svg += `<text x="${padL-18}" y="${gy+4}" font-size="12" font-weight="600" fill="#6B7AA8" text-anchor="end">${u.toFixed(1)}</text>`;
+  }
+
+  const xs = CELLS.map(n => pos[n][0]), ys = CELLS.map(n => pos[n][1]);
+  const bx1 = toX(Math.min(...xs)) - 18, bx2 = toX(Math.max(...xs)) + 18;
+  const by1 = toY(Math.max(...ys)) - 18, by2 = toY(Math.min(...ys)) + 18;
+  svg += `<rect x="${bx1.toFixed(1)}" y="${by1.toFixed(1)}" width="${Math.max(24, bx2-bx1).toFixed(1)}" height="${Math.max(24, by2-by1).toFixed(1)}" rx="12" fill="rgba(255,154,0,0.06)" stroke="#FF7A3D" stroke-width="3" stroke-dasharray="8 6"/>`;
+  svg += `<text x="${bx1+6}" y="${Math.max(18, by1-6)}" font-size="11" font-weight="700" fill="#FF7A3D">wire box</text>`;
+
+  for (const [u, v] of WIRES) {
+    const x1 = toX(pos[u][0]), y1 = toY(pos[u][1]);
+    const x2 = toX(pos[v][0]), y2 = toY(pos[v][1]);
+    svg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#8FA3D9" stroke-width="3" stroke-linecap="round"/>`;
+  }
+
+  if (prevPos) {
+    for (const n of CELLS) {
+      const gx = toX(prevPos[n][0]), gy = toY(prevPos[n][1]);
+      const nx = toX(pos[n][0]), ny = toY(pos[n][1]);
+      if (Math.hypot(nx - gx, ny - gy) > 4) {
+        svg += `<circle cx="${gx.toFixed(1)}" cy="${gy.toFixed(1)}" r="15" fill="none" stroke="${CELL_COL[n]}" stroke-width="2.5" stroke-dasharray="4 3" opacity="0.55"/>`;
+        svg += `<line x1="${gx.toFixed(1)}" y1="${gy.toFixed(1)}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#1F2A5A" stroke-width="2" stroke-dasharray="3 3" opacity="0.6"/>`;
+      }
+    }
+  }
+
+  if (opts.showStarE) {
+    const [tx, ty] = barycenter(pos, "E");
+    const sx = toX(tx), sy = toY(ty);
+    svg += `<line x1="${toX(pos.E[0])}" y1="${toY(pos.E[1])}" x2="${sx}" y2="${sy}" stroke="#FF5C93" stroke-width="3" stroke-dasharray="5 4"/>`;
+    svg += `<text x="${sx}" y="${sy+6}" font-size="22" font-weight="700" fill="#FF5C93" text-anchor="middle">★</text>`;
+  }
+
+  for (const n of CELLS) {
+    const cx = toX(pos[n][0]), cy = toY(pos[n][1]);
+    const isAnc = opts.anchored && ANCHOR_POS[n];
+    svg += `<g data-cell="${n}" style="cursor:${opts.draggable ? 'grab' : 'default'}">
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="18" fill="${CELL_COL[n]}" stroke="#FFFFFF" stroke-width="3.5"/>
+      ${isAnc ? `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="22" fill="none" stroke="#1F2A5A" stroke-width="2.5" stroke-dasharray="4 3"/>` : ""}
+      <text x="${cx.toFixed(1)}" y="${(cy+5).toFixed(1)}" font-size="14" font-weight="700" fill="#FFFFFF" text-anchor="middle">${n}</text>
+    </g>`;
+  }
+  svg += `</svg>`;
+  return svg;
+}
+
+/* ==========================================================================
+   5. BROWSER TOOL LOGIC
+   ========================================================================== */
+let toolPos = clonePos(STAGES.P0);
+let toolPrev = null;
+let toolRound = 0;
+
+function updateAlphaUI() {
+  const a = parseFloat(document.getElementById("alpha-slider").value);
+  document.getElementById("alpha-val").textContent = a.toFixed(2);
+  const hint = document.getElementById("alpha-hint");
+  if (a < 0.25) {
+    hint.textContent = currentLang === "zh" ? "移动太慢" : "barely moves";
+    hint.style.color = "#FF9A00";
+  } else if (a <= 0.70) {
+    hint.textContent = currentLang === "zh" ? "刚刚好" : "just right";
+    hint.style.color = "#2BBF7E";
+  } else {
+    hint.textContent = currentLang === "zh" ? "小心坍缩！" : "collapse risk!";
+    hint.style.color = "#FF5C93";
+  }
+}
+
+function paintTool() {
+  const anchored = document.getElementById("anchor-toggle").checked;
+  const hpwl = computeHPWL(toolPos);
+  const sp = minSpacing(toolPos);
+
+  document.getElementById("tool-hpwl-num").textContent = hpwl.toFixed(1);
+  const pct = Math.min(100, Math.max(4, (hpwl / 56) * 100));
+  document.getElementById("tool-hpwl-bar").style.width = pct + "%";
+  document.getElementById("tool-spacing-badge").textContent =
+    (currentLang === "zh" ? "最小间距: " : "min spacing: ") + sp.toFixed(2);
+
+  document.getElementById("tool-graph").innerHTML = renderInteractiveBoard(toolPos, toolPrev, {
+    anchored,
+    draggable: true
+  });
+
+  const a = parseFloat(document.getElementById("alpha-slider").value);
+  const lines = [
+    `round = ${toolRound}   alpha = ${a.toFixed(2)}   anchors = ${anchored ? "A, C fixed" : "none (free)"}`,
+    `HPWL  = ${hpwl.toFixed(1)} (starter: 52.0 → golden: 14.0)`,
+    `min_spacing = ${sp.toFixed(2)} (safe ≥ 0.25)`,
+    `------------------------------------------------`
+  ];
+  for (const n of CELLS) {
+    const [x, y] = toolPos[n];
+    const [tx, ty] = barycenter(toolPos, n);
+    const tag = (anchored && ANCHOR_POS[n]) ? " [anchor]" : "";
+    lines.push(`${n}: (${x.toFixed(2)}, ${y.toFixed(2)})  ★ target=(${tx.toFixed(2)}, ${ty.toFixed(2)})${tag}`);
+  }
+  lines.push(`\nTip: Drag any cell A–F on the board or press Step 1 round.`);
+  document.getElementById("tool-log").textContent = lines.join("\n");
+}
+
+function setToolStatus(msg, kind) {
+  const el = document.getElementById("tool-status");
+  el.className = "status-line" + (kind ? " " + kind : "");
+  el.textContent = msg;
+}
+
+document.getElementById("load-starter").onclick = () => {
+  toolPos = clonePos(STAGES.P0);
+  toolPrev = null;
+  toolRound = 0;
+  setToolStatus("");
+  paintTool();
+};
+
+document.getElementById("step-force").onclick = () => {
+  const a = parseFloat(document.getElementById("alpha-slider").value);
+  const anchored = document.getElementById("anchor-toggle").checked;
+  toolPrev = clonePos(toolPos);
+  toolPos = stepRelaxation(toolPos, a, anchored);
+  toolRound += 1;
+  setToolStatus(`Round ${toolRound} complete · HPWL = ${computeHPWL(toolPos).toFixed(1)}`);
+  paintTool();
+};
+
+document.getElementById("run-force").onclick = () => {
+  const a = parseFloat(document.getElementById("alpha-slider").value);
+  const anchored = document.getElementById("anchor-toggle").checked;
+  toolPrev = clonePos(toolPos);
+  for (let i = 0; i < 6; i++) {
+    toolPos = stepRelaxation(toolPos, a, anchored);
+    toolRound += 1;
+  }
+  setToolStatus(`Ran 6 rounds (α=${a.toFixed(2)}) · HPWL = ${computeHPWL(toolPos).toFixed(1)}`);
+  paintTool();
+};
+
+document.querySelectorAll("[data-preset]").forEach(btn => {
+  btn.onclick = () => {
+    const p = btn.dataset.preset;
+    toolPrev = clonePos(toolPos);
+    if (p === "golden") {
+      toolPos = clonePos(STAGES.P3);
+      toolRound = 6;
+      document.getElementById("anchor-toggle").checked = true;
+      document.getElementById("alpha-slider").value = "0.50";
+      updateAlphaUI();
+      setToolStatus("Loaded golden layout (P3): HPWL = 14.0, zero collapse.", "ok");
+    } else if (p === "collapsed") {
+      toolPos = clonePos(STAGES.PC);
+      toolRound = 12;
+      document.getElementById("anchor-toggle").checked = false;
+      document.getElementById("alpha-slider").value = "1.00";
+      updateAlphaUI();
+      setToolStatus("Pitfall demo: unanchored α = 1.00 collapsed all 6 cells onto (1.0, 1.0)!", "bad");
+    } else {
+      toolPos = clonePos(STAGES.P0);
+      toolPrev = null;
+      toolRound = 0;
+      setToolStatus("");
+    }
+    paintTool();
+  };
+});
+
+document.getElementById("check-placement").onclick = () => {
+  const hpwl = computeHPWL(toolPos);
+  const sp = minSpacing(toolPos);
+  if (sp < 0.25) {
+    setToolStatus(`Not yet: layout collapsed! min_spacing = ${sp.toFixed(2)} (< 0.25). Enable corner anchors or lower α.`, "bad");
+  } else if (hpwl > 18.5) {
+    setToolStatus(`Not yet: HPWL = ${hpwl.toFixed(1)} is still too wide (> 18.5). Press Step 1 round or Run relaxation.`, "bad");
+  } else {
+    setToolStatus(`Great job! Legal compact placement: HPWL = ${hpwl.toFixed(1)} (≤ 18.5) and min_spacing = ${sp.toFixed(2)} (≥ 0.25).`, "ok");
+  }
+};
+
+document.getElementById("alpha-slider").addEventListener("input", () => {
+  updateAlphaUI();
+  paintTool();
+});
+document.getElementById("anchor-toggle").addEventListener("change", paintTool);
+
+let draggingCell = null;
+const toolGraphEl = document.getElementById("tool-graph");
+toolGraphEl.addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-cell]");
+  if (!g) return;
+  draggingCell = g.dataset.cell;
+  toolPrev = clonePos(toolPos);
+  toolGraphEl.setPointerCapture(e.pointerId);
+});
+toolGraphEl.addEventListener("pointermove", e => {
+  if (!draggingCell) return;
+  const svg = toolGraphEl.querySelector("svg");
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const u = Math.min(2, Math.max(0, ((loc.x - 52) / 290) * 2));
+  const v = Math.min(2, Math.max(0, 2 - ((loc.y - 34) / 290) * 2));
+  toolPos[draggingCell] = [+u.toFixed(2), +v.toFixed(2)];
+  paintTool();
+});
+toolGraphEl.addEventListener("pointerup", () => { draggingCell = null; });
+
+updateAlphaUI();
+paintTool();
+
+/* ==========================================================================
+   6. 5-STEP WALKTHROUGH (Course Notes)
+   ========================================================================== */
+const WALKS = [
+  {
+    title: "1 · Initial spread (P0)",
+    titleZh: "1 · 初始分散布局 (P0)",
+    meta: "Step 1 / 5 · HPWL = 52.0",
+    html: "Cells start spread near the chip corners. The dashed orange <strong>wire box</strong> spans almost the full 2.0 × 2.0 board, giving <strong>HPWL = 52.0</strong>.",
+    htmlZh: "单元最初分散在芯片四角附近。橙色虚线<strong>线框</strong>几乎覆盖整个 2.0 × 2.0 区域，初始 <strong>HPWL = 52.0</strong>。",
+    log: "P0 start:\nA=(0.10, 0.15)  B=(1.90, 0.15)  C=(1.90, 1.85)\nD=(1.90, 1.00)  E=(0.10, 1.85)  F=(1.00, 1.00)\nHPWL = 52.0",
+    render: () => renderInteractiveBoard(STAGES.P0, null, {})
+  },
+  {
+    title: "2 · Neighbor barycenter ★",
+    titleZh: "2 · 计算邻居重心 ★",
+    meta: "Step 2 / 5 · Hooke's law equilibrium",
+    html: "Look at cell <strong>E</strong> and its three friends (A, D, F). The zero-force target ★ is the average position of those three neighbors.",
+    htmlZh: "观察单元 <strong>E</strong> 及其三个邻居（A、D、F）。零合力目标位置 ★ 就是这三个邻居坐标的平均值。",
+    log: "Neighbors of E: A, D, F\ntarget_E = (pos[A] + pos[D] + pos[F]) / 3\n         = (0.70, 1.28)",
+    render: () => renderInteractiveBoard(STAGES.P0, null, { showStarE: true })
+  },
+  {
+    title: "3 · Damped step (P1, α = 0.50)",
+    titleZh: "3 · 阻尼更新步 (P1, α = 0.50)",
+    meta: "Step 3 / 5 · new = (1 − α)·old + α·target",
+    html: "Each cell moves halfway (<code>α = 0.50</code>) toward its target ★. Dashed ghosts show P0 positions; HPWL drops immediately from 52.0 to 26.8.",
+    htmlZh: "每个单元向目标 ★ 移动一半距离（<code>α = 0.50</code>）。虚线圆圈为 P0 旧位置，HPWL 从 52.0 骤降至 26.8。",
+    log: "Round 1 (α = 0.50):\nnew = 0.50 * old + 0.50 * target\nHPWL: 52.0 → 26.8",
+    render: () => renderInteractiveBoard(STAGES.P1, STAGES.P0, {})
+  },
+  {
+    title: "4 · Golden compact layout (P3)",
+    titleZh: "4 · 标准紧凑布局 (P3)",
+    meta: "Step 4 / 5 · HPWL = 14.0",
+    html: "With corner I/O anchors A & C holding the frame, damped springs settle into a tight cluster with <strong>HPWL = 14.0</strong> and clean spacing.",
+    htmlZh: "角落锚点 A 和 C 稳住框架后，阻尼弹簧收敛为紧凑布局，<strong>HPWL = 14.0</strong> 且单元间距安全。",
+    log: "Golden P3:\nHPWL = 14.0 (73% wirelength reduction!)\nmin_spacing = 0.35 (no overlap)",
+    render: () => renderInteractiveBoard(STAGES.P3, STAGES.P1, { anchored: true })
+  },
+  {
+    title: "5 · Pitfall: α = 1.0 without anchors (PC)",
+    titleZh: "5 · 易错点：无锚点 α = 1.0 导致坍缩",
+    meta: "Step 5 / 5 · Collapse pitfall",
+    html: "If you remove corner anchors and step aggressively, all 6 cells collapse onto <code>(1.0, 1.0)</code> — tiny wirelength on paper, completely illegal on silicon!",
+    htmlZh: "如果去掉角落锚点且步长过大，6 个单元会全部堆叠到 <code>(1.0, 1.0)</code>——线长看似极小，但在芯片上完全非法！",
+    log: "Collapsed PC:\nAll cells piled at ~(1.00, 1.00)\nmin_spacing = 0.02 → ILLEGAL OVERLAP!",
+    render: () => renderInteractiveBoard(STAGES.PC, STAGES.P2, {})
+  }
+];
+
+function renderWalk(idx) {
+  const w = WALKS[idx];
+  const zh = currentLang === "zh";
+  document.getElementById("walk-panel").innerHTML = `
+    <div class="walk-card">
+      <div class="walk-banner">
+        <div class="kicker">Module 2 · Lesson 1 · Force-directed placement</div>
+        <h3>${zh ? w.titleZh : w.title}</h3>
+        <div class="meta">${w.meta}</div>
+      </div>
+      <div class="split" style="padding:1.1rem">
+        <div class="graph" style="box-shadow:none;border-color:var(--line)">${w.render()}</div>
+        <div class="explain" style="box-shadow:none;border-color:var(--line)">
+          <h4 style="margin-top:0">${zh ? "原理说明" : "Explanation"}</h4>
+          <p>${zh ? w.htmlZh : w.html}</p>
+          <pre class="log">${w.log}</pre>
+        </div>
+      </div>
+    </div>`;
+}
+document.querySelectorAll("[data-walk]").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll("[data-walk]").forEach(x => x.classList.toggle("is-on", x === b));
+    renderWalk(+b.dataset.walk);
+  };
+});
+document.querySelector("[data-walk='0']").classList.add("is-on");
+renderWalk(0);
+
+/* ==========================================================================
+   7. TABS, SEARCH, DONE BUTTON, QUIZ, GAME & MISSIONS
+   ========================================================================== */
+function showTab(name) {
+  const ids = ["lab", "game", "notes"];
+  if (!ids.includes(name)) name = "lab";
+  ids.forEach(id => {
+    document.getElementById("panel-" + id).hidden = id !== name;
+    document.getElementById("tab-" + id).setAttribute("aria-selected", String(id === name));
+  });
+  document.querySelectorAll(".site-nav a[data-tab-link]").forEach(a => {
+    a.classList.toggle("is-active", a.dataset.tabLink === name);
+  });
+}
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-tab-link]");
+  if (!el) return;
+  if (el.tagName === "BUTTON") e.preventDefault();
+  showTab(el.dataset.tabLink);
+  const href = el.getAttribute("href");
+  if (href && href.startsWith("#") && !["#lab", "#game", "#notes"].includes(href)) {
+    setTimeout(() => document.querySelector(href)?.scrollIntoView({ behavior: "smooth" }), 0);
+  }
+});
+document.querySelectorAll("[data-run-preset]").forEach(b => {
+  b.onclick = () => {
+    showTab("lab");
+    document.querySelector(`[data-preset="${b.dataset.runPreset}"]`)?.click();
+    setTimeout(() => document.getElementById("tool")?.scrollIntoView({ behavior: "smooth" }), 0);
+  };
+});
+document.querySelectorAll("[data-copy]").forEach(b => {
+  b.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(b.dataset.copy);
+      b.textContent = "Copied!";
+      setTimeout(() => { b.textContent = "Copy"; }, 1200);
+    } catch {}
+  };
+});
+
+// Search
+const SEARCH_ITEMS = [
+  ["What to do", "#steps"], ["Lesson Video", "#clip"], ["Browser tool", "#tool"], ["Quiz", "#quiz"],
+  ["Play the logic", "#games"], ["Real-life missions", "#missions"],
+  ["Terminology", "#terms"], ["Rules & equations", "#rules"], ["Walkthrough", "#walk"],
+  ["Implement track (force_directed_place.py)", "#implement"], ["Pitfalls", "#pitfalls"],
+  ["力导向布局", "#terms"], ["阻尼系数 α", "#rules"], ["半周长线长 HPWL", "#rules"]
+];
+const sInput = document.getElementById("site-search-input");
+const sBox = document.querySelector(".site-search-results");
+sInput.addEventListener("input", () => {
+  const q = sInput.value.trim().toLowerCase();
+  if (!q) { sBox.hidden = true; return; }
+  const hits = SEARCH_ITEMS.filter(([label]) => label.toLowerCase().includes(q));
+  sBox.hidden = false;
+  sBox.innerHTML = hits.length
+    ? hits.map(([l, h]) => `<a class="site-search-hit" href="${h}">${l}</a>`).join("")
+    : `<div class="site-search-hit">No matches</div>`;
+});
+sBox.addEventListener("click", e => {
+  sBox.hidden = true;
+  const a = e.target.closest("a");
+  if (!a) return;
+  const h = a.getAttribute("href");
+  if (["#terms", "#rules", "#walk", "#implement", "#pitfalls"].includes(h)) showTab("notes");
+  else if (["#games", "#missions"].includes(h)) showTab("game");
+  else showTab("lab");
+});
+
+// Done button persistence
+const DONE_KEY = "eda-lab-done:learn_placement:force-directed";
+const markBtn = document.getElementById("mark-done");
+function refreshDone() {
+  const on = localStorage.getItem(DONE_KEY) === "1";
+  markBtn.textContent = on ? t("markDoneOn") : t("markDone");
+  markBtn.classList.toggle("is-done", on);
+  document.getElementById("done-pill").hidden = !on;
+}
+markBtn.onclick = () => {
+  localStorage.setItem(DONE_KEY, localStorage.getItem(DONE_KEY) === "1" ? "0" : "1");
+  refreshDone();
+};
+refreshDone();
+
+// 6-Question Quiz
+const QUIZ = [
+  {
+    id: "q1", answer: "0",
+    prompt: {
+      en: "1. In force-directed placement, wires between connected cells are modeled as…",
+      zh: "1. 在力导向布局中，相连单元之间的连线被建模为…"
+    },
+    choices: {
+      en: ["Hooke's law springs that pull connected cells closer", "hard rigid rods that lock distances", "graph Laplacian eigenvectors", "greedy row-packing shelves"],
+      zh: ["将相连单元拉近的胡克定律弹簧", "锁定距离的刚性连杆", "图拉普拉斯特征向量", "贪心行打包货架"]
+    },
+    explain: {
+      en: "Hooke's law springs exert an attractive force proportional to wire displacement, pulling connected cells toward their neighbors.",
+      zh: "胡克定律弹簧施加与位移成正比的吸引力，把相连单元拉向其邻居。"
+    }
+  },
+  {
+    id: "q2", answer: "1",
+    prompt: {
+      en: "2. What is a movable cell's zero-force target position?",
+      zh: "2. 可移动单元的零合力目标位置是什么？"
+    },
+    choices: {
+      en: ["The bottom-left corner (0, 0)", "The weighted average (barycenter) of its connected neighbors", "The farthest corner from the wire box", "A random grid site"],
+      zh: ["左下角原点 (0, 0)", "其相连邻居的加权平均位置（重心）", "距离线框最远的角落", "随机网格点"]
+    },
+    explain: {
+      en: "When a cell sits at the weighted average (barycenter) of its neighbors' coordinates, the net spring forces sum to zero.",
+      zh: "当单元位于邻居坐标的加权平均位置（重心）时，所有弹簧合外力为零。"
+    }
+  },
+  {
+    id: "q3", answer: "2",
+    prompt: {
+      en: "3. Which update formula applies damping factor α ∈ (0, 1]?",
+      zh: "3. 下列哪个更新公式正确应用了阻尼系数 α ∈ (0, 1]？"
+    },
+    choices: {
+      en: ["new = old + α · target", "new = α · old + (1 − α) · target", "new = (1 − α) · old + α · target", "new = old − target / α"],
+      zh: ["new = old + α · target", "new = α · old + (1 − α) · target", "new = (1 − α) · old + α · target", "new = old − target / α"]
+    },
+    explain: {
+      en: "new = (1 − α)·old + α·target blends the old coordinate with the neighbor barycenter; α = 0.5 moves halfway each round.",
+      zh: "new = (1 − α)·old + α·target 将旧坐标与邻居重心混合；α = 0.5 每轮移动一半距离。"
+    }
+  },
+  {
+    id: "q4", answer: "1",
+    prompt: {
+      en: "4. What happens if you run unconstrained force-directed relaxation with α = 1.0 and no anchors or spreading forces?",
+      zh: "4. 如果在没有锚点或扩散力的情况下，使用 α = 1.0 运行无约束力导向松弛会发生什么？"
+    },
+    choices: {
+      en: ["Cells automatically align to legal rows", "All cells collapse onto a single point (illegal pile-up)", "HPWL increases to infinity", "Corner cells move to the boundary"],
+      zh: ["单元自动对齐到合法行", "所有单元坍缩堆叠到同一点（非法重叠）", "HPWL 增大到无穷大", "角落单元移动到边界"]
+    },
+    explain: {
+      en: "Pure attractive springs without anchors or spreading forces pull every cell to the global centroid, causing layout collapse.",
+      zh: "没有锚点或扩散力的纯吸引弹簧会把所有单元拉向全局质心，导致布局坍缩。"
+    }
+  },
+  {
+    id: "q5", answer: "0",
+    prompt: {
+      en: "5. What does HPWL measure on a placement?",
+      zh: "5. 布局中的 HPWL 衡量的是什么？"
+    },
+    choices: {
+      en: ["Half-Perimeter Wirelength: Σ (Δx + Δy) of each net's bounding box", "Total silicon area of all standard cells", "Number of routing layers used", "Clock skew across flip-flops"],
+      zh: ["半周长线长：每个线网包围盒的 Σ (Δx + Δy)", "所有标准单元的总硅片面积", "使用的布线层数", "触发器之间的时钟偏斜"]
+    },
+    explain: {
+      en: "HPWL sums half the perimeter (width + height) of the bounding box for every net, estimating total wirelength.",
+      zh: "HPWL 对每个线网包围盒的半周长（宽 + 高）求和，用于估算总连线长度。"
+    }
+  },
+  {
+    id: "q6", answer: "2",
+    prompt: {
+      en: "6. When comparing HPWL before (52.0) and after (18.7) force-directed placement, you must…",
+      zh: "6. 对比力导向布局前后（52.0 与 18.7）的 HPWL 时，必须…"
+    },
+    choices: {
+      en: ["drop multi-pin nets after placement", "double α on the final check", "evaluate both layouts using the exact same net model", "ignore fixed I/O anchors"],
+      zh: ["布局后丢弃多引脚线网", "在最终检查时将 α 加倍", "使用完全相同的线网模型评估前后布局", "忽略固定的 I/O 锚点"]
+    },
+    explain: {
+      en: "Pitfall #3: changing net decomposition or weights between before/after measurements invalidates HPWL comparisons.",
+      zh: "易错点 #3：前后测量之间更改线网拆解或权重会导致 HPWL 对比失真。"
+    }
+  }
+];
+
+const quizRoot = document.getElementById("quiz-root");
+function renderQuiz() {
+  const saved = {};
+  quizRoot.querySelectorAll(".quiz-item").forEach(it => {
+    const p = it.querySelector("input:checked");
+    if (p) saved[it.dataset.id] = p.value;
+  });
+  const lang = currentLang === "zh" ? "zh" : "en";
+  quizRoot.innerHTML = QUIZ.map(q => {
+    const opts = q.choices[lang].map((c, i) =>
+      `<label><input type="radio" name="${q.id}" value="${i}"${saved[q.id] === String(i) ? " checked" : ""}><span>${c}</span></label>`
+    ).join("");
+    return `<div class="quiz-item" data-id="${q.id}" data-answer="${q.answer}" data-explain="${q.explain[lang].replaceAll('"', '"')}">
+      <p class="prompt">${q.prompt[lang]}</p>
+      <div class="quiz-choices">${opts}</div>
+      <button type="button" class="btn btn-secondary" data-check="${q.id}">${lang === "zh" ? "检查答案" : "Check answer"}</button>
+      <div class="quiz-result"></div>
+    </div>`;
+  }).join("");
+}
+function gradeItem(item) {
+  const picked = item.querySelector("input:checked");
+  const box = item.querySelector(".quiz-result");
+  box.classList.add("show");
+  if (!picked) {
+    box.className = "quiz-result show bad";
+    box.textContent = currentLang === "zh" ? "请先选择一个选项。" : "Please pick an option first.";
+    return false;
+  }
+  const ok = picked.value === item.dataset.answer;
+  box.className = "quiz-result show " + (ok ? "ok" : "bad");
+  box.textContent = (ok ? (currentLang === "zh" ? "✓ 正确！" : "✓ Correct! ") : (currentLang === "zh" ? "✗ 再想想：" : "✗ Not quite: ")) + item.dataset.explain;
+  return ok;
+}
+quizRoot.addEventListener("click", e => {
+  if (e.target.dataset.check) gradeItem(quizRoot.querySelector(`[data-id="${e.target.dataset.check}"]`));
+});
+document.getElementById("score-quiz").onclick = () => {
+  let n = 0, ok = 0;
+  quizRoot.querySelectorAll(".quiz-item").forEach(it => { n++; if (gradeItem(it)) ok++; });
+  const sum = document.querySelector(".quiz-summary");
+  sum.classList.add("show");
+  sum.textContent = (currentLang === "zh" ? `测验得分：${ok} / ${n}` : `Quiz score: ${ok} / ${n}`);
+};
+renderQuiz();
+
+// Matching Game
+function mountMatch(el, pairs, statusEl) {
+  let picked = null, done = 0;
+  function paint() {
+    picked = null; done = 0;
+    statusEl.textContent = `0 / ${pairs.length} matched`;
+    statusEl.className = "status-line";
+    el.innerHTML = `<div class="match-col"></div><div class="match-col"></div>`;
+    const [L, R] = el.children;
+    pairs.forEach(p => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = p.left; b.dataset.id = p.id; b.dataset.side = "L";
+      L.appendChild(b);
+    });
+    [...pairs].sort(() => Math.random() - 0.5).forEach(p => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = p.right; b.dataset.id = p.id; b.dataset.side = "R";
+      R.appendChild(b);
+    });
+  }
+  el.onclick = e => {
+    const b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    if (!picked) { b.classList.add("picked"); picked = b; return; }
+    if (picked === b) { b.classList.remove("picked"); picked = null; return; }
+    if (picked.dataset.side === b.dataset.side) { picked.classList.remove("picked"); b.classList.add("picked"); picked = b; return; }
+    if (picked.dataset.id === b.dataset.id) {
+      picked.classList.add("ok"); b.classList.add("ok");
+      picked.disabled = true; b.disabled = true;
+      picked.classList.remove("picked"); picked = null; done++;
+      statusEl.className = "status-line ok";
+      statusEl.textContent = done === pairs.length ? "★ All pairs matched!" : `${done} / ${pairs.length} matched`;
+    } else {
+      picked.classList.add("bad"); b.classList.add("bad");
+      const x = picked, y = b;
+      setTimeout(() => { x.classList.remove("bad", "picked"); y.classList.remove("bad"); }, 450);
+      picked = null;
+      statusEl.className = "status-line bad";
+      statusEl.textContent = "Not a match — try again.";
+    }
+  };
+  paint();
+  return paint;
+}
+const MATCH_PAIRS = [
+  { id: "H", left: "Hooke's law spring", right: "Pulls connected cells closer; longer wires pull harder" },
+  { id: "B", left: "Target barycenter ★", right: "Average (x, y) position of a cell's connected neighbors" },
+  { id: "A", left: "Damping factor α", right: "Blends old and target positions: new = (1 − α)·old + α·target" },
+  { id: "W", left: "HPWL", right: "Half-Perimeter Wirelength: sum of bounding-box width + height" },
+  { id: "X", left: "Wire box", right: "Dashed orange bounding box enclosing all placed cells" },
+  { id: "C", left: "Collapse pitfall", right: "Unanchored springs pulling every cell onto one single point" }
+];
+let resetMatch = mountMatch(document.getElementById("match-rules"), MATCH_PAIRS, document.getElementById("match-rules-status"));
+document.querySelector("[data-reset-match='rules']").onclick = () => resetMatch();
+
+// 3 Real-Life Missions
+const MISSIONS = [
+  {
+    id: "er",
+    title: "01 · Hospital Wing Routing",
+    crisis: "Six hospital units share critical pneumatic-tube links. Relax the layout from HPWL 52.0 down to ≤ 18.0 while keeping at least 0.28 spacing between wings.",
+    map: "A=Triage · B=Lab · C=Pharmacy · D=ICU · E=Radiology · F=Central Hub",
+    targetHPWL: 18.0, minSp: 0.28
+  },
+  {
+    id: "pod",
+    title: "02 · Automated Warehouse Pods",
+    crisis: "Six fulfillment stations are scattered across the floor. Tune α to around 0.50 and relax the stations until travel HPWL ≤ 16.5 without stacking pods.",
+    map: "A=Inbound · B=Pack · C=ColdStore · D=Sorter · E=Scanner · F=Conveyor",
+    targetHPWL: 16.5, minSp: 0.30
+  },
+  {
+    id: "soc",
+    title: "03 · SoC Macro Floorplan Seed",
+    crisis: "Seed the global placement of six logic blocks before overlap removal. Hit the golden target HPWL ≤ 15.0 with corner anchors A & C active.",
+    map: "A=ALU · B=RegFile · C=L2Cache · D=Decoder · E=FPU · F=Crossbar",
+    targetHPWL: 15.0, minSp: 0.32
+  }
+];
+const XP_KEY = "eda-lab-xp:force-directed";
+function renderXp() {
+  let s = [];
+  try { s = JSON.parse(localStorage.getItem(XP_KEY) || "[]"); } catch {}
+  document.getElementById("xp-line").textContent = `Missions solved: ${s.length} / ${MISSIONS.length}`;
+}
+function markSolved(id) {
+  let s = [];
+  try { s = JSON.parse(localStorage.getItem(XP_KEY) || "[]"); } catch {}
+  if (!s.includes(id)) s.push(id);
+  localStorage.setItem(XP_KEY, JSON.stringify(s));
+  renderXp();
+}
+function mountMissions() {
+  const root = document.getElementById("mission-root");
+  root.innerHTML = MISSIONS.map(m => `
+    <div class="card">
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.4rem">
+        <h3 style="margin:0">${m.title}</h3>
+        <span class="pill">Target HPWL ≤ ${m.targetHPWL}</span>
+        <span class="pill pill-muted">Min spacing ≥ ${m.minSp}</span>
+      </div>
+      <p>${m.crisis}</p>
+      <p><strong>Map:</strong> ${m.map}</p>
+      <div class="controls">
+        <label class="slider-pill">α = <strong id="ma-val-${m.id}">0.50</strong>
+          <input type="range" id="ma-${m.id}" min="0.10" max="1.00" step="0.05" value="0.50">
+        </label>
+        <button type="button" class="btn btn-pink" id="mstep-${m.id}">Step 1 round</button>
+        <button type="button" class="btn btn-green" id="mrun-${m.id}">Relax 5 rounds</button>
+        <button type="button" class="btn btn-primary" id="mchk-${m.id}">Check mission</button>
+        <button type="button" class="btn btn-ghost" id="mrst-${m.id}">Reset</button>
+      </div>
+      <div class="graph" id="mg-${m.id}"></div>
+      <p class="status-line" id="ms-${m.id}"></p>
+    </div>
+  `).join("");
+
+  MISSIONS.forEach(m => {
+    let pos = clonePos(STAGES.P0), prev = null;
+    const box = document.getElementById("mg-" + m.id);
+    const st = document.getElementById("ms-" + m.id);
+    const sl = document.getElementById("ma-" + m.id);
+    const vl = document.getElementById("ma-val-" + m.id);
+    const paint = () => {
+      box.innerHTML = renderInteractiveBoard(pos, prev, { anchored: true });
+    };
+    sl.oninput = () => { vl.textContent = parseFloat(sl.value).toFixed(2); };
+    document.getElementById("mstep-" + m.id).onclick = () => {
+      prev = clonePos(pos);
+      pos = stepRelaxation(pos, parseFloat(sl.value), true);
+      st.className = "status-line";
+      st.textContent = `Current HPWL = ${computeHPWL(pos).toFixed(1)} · spacing = ${minSpacing(pos).toFixed(2)}`;
+      paint();
+    };
+    document.getElementById("mrun-" + m.id).onclick = () => {
+      prev = clonePos(pos);
+      const a = parseFloat(sl.value);
+      for (let i = 0; i < 5; i++) pos = stepRelaxation(pos, a, true);
+      st.className = "status-line";
+      st.textContent = `Current HPWL = ${computeHPWL(pos).toFixed(1)} · spacing = ${minSpacing(pos).toFixed(2)}`;
+      paint();
+    };
+    document.getElementById("mrst-" + m.id).onclick = () => {
+      pos = clonePos(STAGES.P0); prev = null; st.textContent = ""; paint();
+    };
+    document.getElementById("mchk-" + m.id).onclick = () => {
+      const h = computeHPWL(pos), sp = minSpacing(pos);
+      if (h <= m.targetHPWL && sp >= m.minSp) {
+        st.className = "status-line ok";
+        st.textContent = `★ Mission solved! HPWL = ${h.toFixed(1)} (≤ ${m.targetHPWL}) and spacing = ${sp.toFixed(2)} (≥ ${m.minSp}).`;
+        markSolved(m.id);
+      } else {
+        st.className = "status-line bad";
+        st.textContent = `Not quite: HPWL = ${h.toFixed(1)} (need ≤ ${m.targetHPWL}), spacing = ${sp.toFixed(2)} (need ≥ ${m.minSp}).`;
+      }
+    };
+    paint();
+  });
+  renderXp();
+}
+mountMissions();
+
+/* ==========================================================================
+   8. 1920x1080 SVG ANIMATED LESSON ENGINE (AUTOMATIC FALLBACK WHEN MP4 ABSENT)
+   ========================================================================== */
+const AW = 1920, AH = 1080, ADUR = 176.0;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const eo = t => 1 - Math.pow(1 - clamp(t), 3);
+const eob = t => { t = clamp(t); const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const ez = t => { t = clamp(t); return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
+const pp = x => 1 - Math.abs(1 - (((x % 2) + 2) % 2));
+const R = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const f1 = n => Math.round(n * 10) / 10;
+const esc = s => s.replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
+const AINK = "#1F2A5A", ASOFT = "#6B7AA8";
+
+const mctx = document.createElement("canvas").getContext("2d");
+function meas(s, size, w = 500, f = "Poppins") {
+  mctx.font = `${w} ${size}px ${f}`;
+  return mctx.measureText(s.replace(/\*\*/g, "")).width;
+}
+const wCache = {};
+function wrap(s, size, w, maxW) {
+  const k = s + size + w + maxW;
+  if (wCache[k]) return wCache[k];
+  const words = s.split(" "), lines = []; let cur = "";
+  for (const wd of words) {
+    const tst = cur ? cur + " " + wd : wd;
+    if (meas(tst, size, w) > maxW && cur) { lines.push(cur); cur = wd; } else cur = tst;
+  }
+  if (cur) lines.push(cur);
+  return wCache[k] = lines;
+}
+function T(s, x, y, size, fill, o = {}) {
+  const w = o.w || 500, a = o.a || "start", f = o.f || "Poppins";
+  const parts = s.split("**"); let inner = "";
+  parts.forEach((p, i) => {
+    if (!p) return;
+    const b = i % 2 === 1;
+    inner += `<tspan${b ? ` font-weight="700" fill="${o.acc || "#FF5C93"}"` : ""}>${esc(p)}</tspan>`;
+  });
+  return `<text x="${f1(x)}" y="${f1(y)}" font-family="${f}" font-size="${size}" font-weight="${w}" fill="${fill}" text-anchor="${a}">${inner}</text>`;
+}
+function TW(s, x, y, maxW, size, fill, o = {}) {
+  const L = wrap(s, size, o.w || 500, maxW), lh = o.lh || size * 1.35;
+  return L.map((l, i) => T(l, x, y + i * lh, size, fill, o)).join("");
+}
+function TC(s, x, cy, maxW, size, fill, o = {}) {
+  const L = wrap(s, size, o.w || 500, maxW), lh = o.lh || size * 1.3;
+  const y0 = cy - (L.length - 1) * lh / 2 + size * 0.35;
+  return L.map((l, i) => T(l, x, y0 + i * lh, size, fill, o)).join("");
+}
+function G(t, t0, inner, cx, cy, o = {}) {
+  if (t < t0) return "";
+  const u = (t - t0) / (o.d || .45), k = eob(u), a = clamp((t - t0) / .18);
+  return `<g opacity="${f1(a * 100) / 100}" transform="translate(${f1(cx)} ${f1(cy)}) scale(${k.toFixed(3)}) translate(${f1(-cx)} ${f1(-cy)})">${inner}</g>`;
+}
+const rect = (x, y, w, h, r, fill, ex = "") => `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h)}" rx="${r}" fill="${fill}" ${ex}/>`;
+const circ = (x, y, r, fill, ex = "") => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="${fill}" ${ex}/>`;
+const card = (x, y, w, h, fill = "#fff", r = 36) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" filter="url(#ash)"/>`;
+function starP(cx, cy, r, rot = 0) {
+  let p = "";
+  for (let i = 0; i < 10; i++) {
+    const a = rot + i * Math.PI / 5 - Math.PI / 2, rr = i % 2 ? r * .45 : r;
+    p += (i ? "L" : "M") + f1(cx + Math.cos(a) * rr) + " " + f1(cy + Math.sin(a) * rr);
+  }
+  return p + "Z";
+}
+function arrow(x1, y1, x2, y2, col, w = 6) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+  const hx = x2 - ux * 18, hy = y2 - uy * 18;
+  return `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(hx)}" y2="${f1(hy)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>` +
+    `<polygon points="${f1(x2)},${f1(y2)} ${f1(hx - uy * 11)},${f1(hy + ux * 11)} ${f1(hx + uy * 11)},${f1(hy - ux * 11)}" fill="${col}"/>`;
+}
+
+const ASEC = [
+  { sc: 0, s: 0, e: 16.0, title: "", label: "Title", acc: "#FF5C93", phrase: "Hi! I'm Pip!", mood: "wave" },
+  { sc: 1, s: 16.0, e: 34.0, title: "The big idea", label: "Big idea", acc: "#4C7DFF", phrase: "Pull to the average!", mood: "smile" },
+  { sc: 2, s: 34.0, e: 52.0, title: "Pseudocode", label: "Pseudocode", acc: "#9B5DFF", phrase: "Blend with α!", mood: "smile" },
+  { sc: 3, s: 52.0, e: 60.0, title: "Algorithm sketch", label: "Sketch", acc: "#00B8A9", phrase: "Here's the loop!", mood: "smile" },
+  { sc: 4, s: 60.0, e: 70.0, title: "Start: spread out (HPWL 52)", label: "Step 1", acc: "#FF5C93", phrase: "Long wires!", mood: "worry" },
+  { sc: 5, s: 70.0, e: 80.0, title: "Find neighbor barycenter ★", label: "Step 2", acc: "#FF9A00", phrase: "Aim for the star!", mood: "o" },
+  { sc: 6, s: 80.0, e: 89.0, title: "Damped step α = 0.50", label: "Step 3", acc: "#4C7DFF", phrase: "Halfway there!", mood: "o" },
+  { sc: 7, s: 89.0, e: 97.0, title: "Golden layout: HPWL 14", label: "Step 4", acc: "#2BBF7E", phrase: "Short wires!", mood: "smile" },
+  { sc: 8, s: 97.0, e: 106.0, title: "Step 5 · Tuning the α dial", label: "Step 5 α", acc: "#9B5DFF", phrase: "Watch α!", mood: "o" },
+  { sc: 9, s: 106.0, e: 125.0, title: "Browser lab track", label: "Lab track", acc: "#00B8A9", phrase: "Try the tool!", mood: "smile" },
+  { sc: 10, s: 125.0, e: 144.0, title: "Implement track", label: "Implement", acc: "#4C7DFF", phrase: "Code it yourself!", mood: "smile" },
+  { sc: 11, s: 144.0, e: 161.0, title: "Pitfalls", label: "Pitfalls", acc: "#FF5C93", phrase: "Watch out!", mood: "worry" },
+  { sc: 12, s: 161.0, e: 176.0, title: "Your turn!", label: "Your turn", acc: "#4C7DFF", phrase: "You can do it!", mood: "cheer" }
+];
+function aSecIdx(t) { for (let i = ASEC.length - 1; i >= 0; i--) if (t >= ASEC[i].s) return i; return 0; }
+
+const ADEFS = `<defs>
+  <linearGradient id="asky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BFE8FF"/><stop offset=".65" stop-color="#E6F6FF"/><stop offset="1" stop-color="#FFF3C9"/></linearGradient>
+  <linearGradient id="ag1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF5C93"/><stop offset=".5" stop-color="#FF9A3D"/><stop offset="1" stop-color="#9B5DFF"/></linearGradient>
+  <linearGradient id="agb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF5C93"/><stop offset=".5" stop-color="#FFB300"/><stop offset="1" stop-color="#2BBF7E"/></linearGradient>
+  <linearGradient id="agm" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2BBF7E"/><stop offset=".5" stop-color="#FFB300"/><stop offset="1" stop-color="#FF5C93"/></linearGradient>
+  <filter id="ash" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1F2A5A" flood-opacity=".16"/></filter>
+</defs>`;
+const ABUB = ["#FF9EB5", "#FFD23F", "#7FD1FF", "#B79CFF", "#8CE6B0", "#FFB07A"];
+const APAST = ["#FFE9A8", "#C9F2DC", "#D3E1FF", "#FFD3E3"];
+const ADARK = ["#FFB300", "#2BBF7E", "#4C7DFF", "#FF5C93"];
+
+function aBg(t) {
+  let s = rect(0, 0, AW, AH, 0, "url(#asky)");
+  [[200, 170, 1.0, .9, 22], [900, 120, 1.3, .8, 14], [1500, 230, .9, .85, 28], [1100, 360, .7, .6, 18]].forEach(([x, y, sc, a, sp]) => {
+    const xx = ((x + t * sp) % 2400) - 240;
+    s += `<g transform="translate(${f1(xx)} ${y}) scale(${sc})" opacity="${a}"><ellipse cx="0" cy="0" rx="90" ry="34" fill="#fff"/><circle cx="-30" cy="-26" r="38" fill="#fff"/><circle cx="25" cy="-34" r="46" fill="#fff"/></g>`;
+  });
+  for (let i = 0; i < 14; i++) {
+    const sp = 18 + R(i + 30) * 26, y = 1120 - ((t * sp + R(i + 60) * 1300) % 1300);
+    const x = R(i) * 1920 + Math.sin(t * .8 + i) * 22, r = 14 + R(i + 90) * 30;
+    s += circ(x, y, r, ABUB[i % 6], 'opacity=".38"');
+  }
+  s += `<path d="M0 1005 Q 400 935 820 990 T 1620 972 T 1920 1000 V1080 H0Z" fill="#B3EBAA"/>`;
+  s += `<path d="M0 1052 Q 520 1000 1020 1042 T 1920 1030 V1080 H0Z" fill="#82DB8F"/>`;
+  return s;
+}
+
+function aProgress(t) {
+  const x0 = 120, x1 = 1800, w = x1 - x0, p = clamp(t / ADUR);
+  let s = rect(x0, 30, w, 18, 9, "#fff", 'opacity=".75"') + rect(x0, 30, Math.max(18, w * p), 18, 9, "url(#agb)");
+  ASEC.forEach((c, i) => { if (i > 0) s += circ(x0 + w * c.s / ADUR, 39, 5, t >= c.s ? "#fff" : "#B9C6E8"); });
+  s += `<path d="${starP(x0 + w * p, 39, 22, t * 1.5)}" fill="#FFD23F" stroke="#F2A900" stroke-width="4" stroke-linejoin="round"/>`;
+  return s;
+}
+
+function aMascot(t, sec) {
+  const cheer = sec.mood === "cheer";
+  const jump = cheer ? Math.abs(Math.sin(t * 5)) * 55 : Math.abs(Math.sin(t * 3)) * 12;
+  const cx = 1795, ground = 1010, cy = ground - 72 - jump;
+  const blink = (t % 3.3) < .13;
+  let s = `<ellipse cx="${cx}" cy="${ground}" rx="${f1(62 - jump * .3)}" ry="12" fill="#000" opacity=".12"/>`;
+  s += `<g transform="translate(${cx} ${f1(cy)})">`;
+  s += `<line x1="0" y1="-60" x2="0" y2="-92" stroke="#F2A900" stroke-width="6" stroke-linecap="round"/>` + circ(0, -98 + Math.sin(t * 6) * 3, 11, "#FF5C93");
+  if (sec.mood === "wave" || cheer) {
+    const a = Math.sin(t * 9) * 18;
+    s += `<line x1="56" y1="8" x2="94" y2="${f1(-34 + a)}" stroke="#F2A900" stroke-width="12" stroke-linecap="round"/>` + circ(96, -38 + a, 13, "#FFD23F", 'stroke="#F2A900" stroke-width="5"');
+  }
+  s += `<ellipse cx="-26" cy="66" rx="22" ry="11" fill="#F2A900"/><ellipse cx="26" cy="66" rx="22" ry="11" fill="#F2A900"/>`;
+  s += circ(0, 0, 64, "#FFD23F", 'stroke="#F2A900" stroke-width="6"');
+  s += circ(-38, 16, 11, "#FF9EB5", 'opacity=".85"') + circ(38, 16, 11, "#FF9EB5", 'opacity=".85"');
+  [-22, 22].forEach(ex => {
+    s += `<ellipse cx="${ex}" cy="-8" rx="9" ry="${blink ? 1.5 : 13}" fill="${AINK}"/>`;
+    if (!blink) s += circ(ex - 3, -13, 3.5, "#fff");
+  });
+  if (sec.mood === "worry") {
+    s += `<line x1="-36" y1="-30" x2="-12" y2="-38" stroke="${AINK}" stroke-width="5" stroke-linecap="round"/><line x1="12" y1="-38" x2="36" y2="-30" stroke="${AINK}" stroke-width="5" stroke-linecap="round"/>`;
+    s += `<path d="M-16 32 Q0 18 16 32" stroke="${AINK}" stroke-width="6" fill="none" stroke-linecap="round"/>`;
+  } else if (sec.mood === "o") {
+    s += `<ellipse cx="0" cy="26" rx="13" ry="${f1(14 + Math.sin(t * 8) * 2)}" fill="${AINK}"/>`;
+  } else {
+    s += `<path d="M-20 16 Q0 40 20 16" stroke="${AINK}" stroke-width="6" fill="none" stroke-linecap="round"/>`;
+  }
+  s += `</g>`;
+  const lt = t - sec.s;
+  if (lt > .6 && lt < 5.6) {
+    const w = meas(sec.phrase, 34, 700) + 64, x = 1715 - w, y = 905;
+    const k = eob((lt - .6) / .4) * (1 - eo((lt - 5.2) / .4));
+    const inner = rect(x, y, w, 72, 36, "#fff", 'stroke="#FFD23F" stroke-width="5" filter="url(#ash)"') +
+      `<polygon points="${f1(x + w - 4)},${y + 22} ${f1(x + w + 34)},${y + 50} ${f1(x + w - 4)},${y + 52}" fill="#fff" stroke="#FFD23F" stroke-width="5" stroke-linejoin="round"/>` +
+      rect(x + w - 12, y + 16, 16, 44, 0, "#fff") +
+      T(sec.phrase, x + w / 2 - 6, y + 49, 34, AINK, { w: 700, a: "middle" });
+    s += `<g transform="translate(${f1(x + w)} ${y + 36}) scale(${f1(Math.max(k, 0) * 100) / 100}) translate(${f1(-(x + w))} ${-(y + 36)})">${inner}</g>`;
+  }
+  return s;
+}
+
+function aHeader(t, sec, extra = "") {
+  const lt = t - sec.s, k = eob(lt / .5), wd = meas(sec.title, 68, 700);
+  return `<g transform="translate(110 150) scale(${f1(k * 100) / 100}) translate(-110 -150)">${T(sec.title, 110, 150, 68, AINK, { w: 700 })}${rect(110, 168, wd * eo(lt / .8), 12, 6, sec.acc)}${extra}</g>`;
+}
+
+function lerpStages(pA, pB, u) {
+  const out = {};
+  for (const n of CELLS) out[n] = [lerp(pA[n][0], pB[n][0], u), lerp(pA[n][1], pB[n][1], u)];
+  return out;
+}
+function drawBoard(t, x0, y0, size, pos, o = {}) {
+  const toX = u => x0 + (u / 2) * size;
+  const toY = v => y0 + ((2 - v) / 2) * size;
+  let g = rect(x0 - 12, y0 - 12, size + 24, size + 24, 22, "#FFF7E0", `stroke="${AINK}" stroke-width="6"`);
+  for (let i = 0; i <= 4; i++) {
+    const u = i * 0.5, gx = toX(u), gy = toY(u);
+    if (i > 0 && i < 4) {
+      g += `<line x1="${f1(gx)}" y1="${y0}" x2="${f1(gx)}" y2="${y0 + size}" stroke="#F0E3BC" stroke-width="3"/>`;
+      g += `<line x1="${x0}" y1="${f1(gy)}" x2="${x0 + size}" y2="${f1(gy)}" stroke="#F0E3BC" stroke-width="3"/>`;
+    }
+    g += T(u.toFixed(1), gx, y0 + size + 34, 22, ASOFT, { a: "middle" });
+    g += T(u.toFixed(1), x0 - 20, gy + 8, 22, ASOFT, { a: "end" });
+  }
+  const xs = CELLS.map(n => pos[n][0]), ys = CELLS.map(n => pos[n][1]);
+  const bx1 = toX(Math.min(...xs)) - 28, bx2 = toX(Math.max(...xs)) + 28;
+  const by1 = toY(Math.max(...ys)) - 28, by2 = toY(Math.min(...ys)) + 28;
+  g += `<rect x="${f1(bx1)}" y="${f1(by1)}" width="${f1(Math.max(40, bx2 - bx1))}" height="${f1(Math.max(40, by2 - by1))}" rx="18" fill="rgba(255,154,0,0.06)" stroke="#FF7A3D" stroke-width="5" stroke-dasharray="14 10" stroke-dashoffset="${f1(-t * 28)}"/>`;
+  g += T("wire box", bx1 + 10, Math.max(y0 + 24, by1 - 10), 22, "#FF7A3D", { w: 700 });
+
+  WIRES.forEach(([u, v], idx) => {
+    const x1 = toX(pos[u][0]), y1 = toY(pos[u][1]);
+    const x2 = toX(pos[v][0]), y2 = toY(pos[v][1]);
+    g += `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="#8FA3D9" stroke-width="5" stroke-linecap="round"/>`;
+    const p = (t * 0.55 + idx * 0.17) % 1;
+    g += circ(lerp(x1, x2, p), lerp(y1, y2, p), 5, "#4C7DFF", 'opacity=".65"');
+  });
+
+  if (o.ghost) {
+    for (const n of CELLS) {
+      const gx = toX(o.ghost[n][0]), gy = toY(o.ghost[n][1]);
+      const nx = toX(pos[n][0]), ny = toY(pos[n][1]);
+      if (Math.hypot(nx - gx, ny - gy) > 8) {
+        g += circ(gx, gy, 24, "none", `stroke="${CELL_COL[n]}" stroke-width="4" stroke-dasharray="7 5" opacity=".55"`);
+        g += arrow(gx, gy, nx, ny, AINK, 4);
+      }
+    }
+  }
+
+  CELLS.forEach((n, i) => {
+    const bob = Math.sin(t * 2.6 + i) * 3;
+    const cx = toX(pos[n][0]), cy = toY(pos[n][1]) + bob;
+    g += circ(cx, cy, 34, CELL_COL[n], 'stroke="#fff" stroke-width="5"');
+    g += T(n, cx, cy + 12, 34, "#fff", { w: 700, a: "middle" });
+  });
+  return g;
+}
+
+function aBulletCards(t, items, times, x, y, w, h, gap, size) {
+  let s = "";
+  items.forEach((it, i) => {
+    const yy = y + i * (h + gap), cy = yy + h / 2;
+    const inner = rect(x, yy, w, h, 34, APAST[i % 4], 'stroke="#fff" stroke-width="5"') +
+      circ(x + 66, cy, 38, ADARK[i % 4]) +
+      T(String(i + 1), x + 66, cy + 16, 44, "#fff", { w: 700, a: "middle" }) +
+      TC(it, x + 130, cy, w - 160, size, AINK, { acc: ADARK[i % 4] === "#FFB300" ? "#E07B00" : ADARK[i % 4] });
+    s += G(t, times[i], inner, x + w / 2, cy);
+  });
+  return s;
+}
+
+function hpwlMeter(t, t0, val, label = "HPWL (wire length)") {
+  const x = 90, y = 190, pct = clamp(val / 56);
+  let inner = card(x, y, 840, 120);
+  inner += T(label, x + 36, y + 40, 26, ASOFT, { w: 500 });
+  inner += T(val.toFixed(1), x + 36, y + 96, 52, val <= 18 ? "#2BBF7E" : AINK, { w: 700, f: "IBM Plex Mono" });
+  inner += rect(x + 250, y + 54, 540, 28, 14, "#E8EEF9");
+  inner += rect(x + 250, y + 54, Math.max(28, 540 * pct), 28, 14, "url(#agm)");
+  const gx = x + 250 + 540 * (14 / 56);
+  inner += `<line x1="${gx}" y1="${y + 42}" x2="${gx}" y2="${y + 94}" stroke="${AINK}" stroke-width="5" stroke-linecap="round"/>`;
+  inner += T("golden 14", gx, y + 36, 22, "#2BBF7E", { w: 700, a: "middle" });
+  return G(t, t0, inner, x + 420, y + 60);
+}
+
+function stepBadge(t, n, t0, acc) {
+  let inner = rect(980, 190, 420, 64, 32, "#fff", `stroke="${acc}" stroke-width="5"`) + T(`Step ${n} of 5`, 1010, 234, 32, AINK, { w: 700 });
+  for (let i = 0; i < 5; i++) inner += circ(1255 + i * 30, 222, 10, i < n ? acc : "#DCE5FA");
+  return G(t, t0, inner, 1190, 222);
+}
+function explainBox(t, txt, t0, acc) {
+  const inner = card(980, 275, 850, 270) +
+    `<path d="M980 311 a36 36 0 0 1 36 -36 H1000 V545 H1016 a36 36 0 0 1 -36 -36 Z" fill="${acc}"/>` +
+    TW(txt, 1030, 328, 770, 30, AINK, { acc: acc === "#FFB300" ? "#E07B00" : acc });
+  return G(t, t0, inner, 1405, 410);
+}
+function chips3(t, items, times) {
+  let s = "";
+  items.forEach((it, i) => {
+    const yy = 565 + i * 98;
+    const inner = rect(980, yy, 850, 84, 42, APAST[i % 4], 'stroke="#fff" stroke-width="5"') +
+      circ(1030, yy + 42, 24, ADARK[i % 4]) +
+      `<polyline points="1019,${yy + 42} 1027,${yy + 51} 1042,${yy + 33}" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>` +
+      T(it, 1085, yy + 54, 31, AINK, { w: 500 });
+    s += G(t, times[i], inner, 1405, yy + 42);
+  });
+  return s;
+}
+
+function aIcon(n, cx, cy, col, t) {
+  cy += Math.sin(t * 3) * 4;
+  if (n === "browser") return rect(cx - 85, cy - 62, 170, 124, 18, "#fff", `stroke="${col}" stroke-width="8"`) + rect(cx - 85, cy - 62, 170, 34, 18, col) + circ(cx - 60, cy - 45, 6, "#fff") + circ(cx - 42, cy - 45, 6, "#fff") + `<line x1="${cx - 30}" y1="${cy + 22}" x2="${cx + 28}" y2="${cy - 4}" stroke="#9DB3DD" stroke-width="6"/>` + circ(cx - 30, cy + 22, 16, "#00B8A9") + circ(cx + 28, cy - 4, 16, "#FF7A3D");
+  if (n === "play") return circ(cx, cy, 70, col) + `<polygon points="${cx - 22},${cy - 38} ${cx - 22},${cy + 38} ${cx + 42},${cy}" fill="#fff"/>`;
+  if (n === "lock") return rect(cx - 56, cy - 6, 112, 84, 18, col) + `<path d="M${cx - 34} ${cy - 6} V${cy - 34} a34 34 0 0 1 68 0 V${cy - 6}" fill="none" stroke="#B8860B" stroke-width="16" stroke-linecap="round"/>` + circ(cx, cy + 30, 13, "#fff");
+  if (n === "code") return rect(cx - 88, cy - 62, 176, 124, 22, col) + T("</>", cx, cy + 22, 66, "#fff", { w: 700, a: "middle", f: "IBM Plex Mono" });
+  if (n === "file") return `<path d="M${cx - 62} ${cy - 76} H${cx + 22} L${cx + 62} ${cy - 36} V${cy + 76} H${cx - 62} Z" fill="#fff" stroke="${col}" stroke-width="8" stroke-linejoin="round"/>` + T("{ }", cx, cy + 20, 54, col, { w: 700, a: "middle", f: "IBM Plex Mono" });
+  if (n === "check") return circ(cx, cy, 72, col) + `<polyline points="${cx - 34},${cy + 2} ${cx - 8},${cy + 30} ${cx + 38},${cy - 26}" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return "";
+}
+
+const ASCENES = [];
+ASCENES[0] = (t) => {
+  let s = G(t, .2, rect(110, 185, 390, 58, 29, "#fff", 'stroke="#FF5C93" stroke-width="5"') + T("Module 2 · Lesson 1", 305, 224, 28, "#FF5C93", { w: 700, a: "middle" }), 305, 214);
+  [["Force-directed", 335, "#1F2A5A"], ["placement", 450, "url(#ag1)"]].forEach(([txt, by, fill], li) => {
+    let acc = 0;
+    [...txt].forEach((ch, ci) => {
+      const t0 = .3 + (li * 10 + ci) * .045, u = (t - t0) / .45;
+      if (u > 0) {
+        const k = eob(u), dy = (1 - k) * -80 + Math.sin(t * 2.2 + ci * .5) * 3;
+        s += `<text x="${f1(110 + acc)}" y="${f1(by + dy)}" font-family="Poppins" font-weight="700" font-size="104" fill="${fill}" opacity="${f1(clamp(u * 3))}">${esc(ch)}</text>`;
+      }
+      acc += meas(txt.slice(0, ci + 1), 104, 700) - meas(txt.slice(0, ci), 104, 700);
+    });
+  });
+  s += G(t, 1.4, card(110, 505, 830, 290) + TW("Treat wires as **Hooke's law springs**! Pull each cell toward the **average position** of its neighbors so the wire box shrinks.", 150, 580, 750, 36, AINK, { acc: "#FF5C93", lh: 54 }), 525, 650);
+  const k = t < 5.0 ? 0 : ez(pp((t - 5.0) / 5.0));
+  const pos = lerpStages(STAGES.P0, STAGES.P3, k);
+  let b = card(1000, 185, 760, 610) + T("6-cell netlist · 8 wires", 1380, 242, 30, ASOFT, { w: 700, a: "middle" });
+  b += drawBoard(t, 1170, 275, 420, pos);
+  b += T(k > .5 ? "shorter wires! (HPWL 14)" : "long wires… (HPWL 52)", 1380, 765, 34, k > .5 ? "#2BBF7E" : "#FF5C93", { w: 700, a: "middle" });
+  s += G(t, .8, b, 1380, 490);
+  return s;
+};
+
+ASCENES[1] = (t, sec) => {
+  let s = aHeader(t, sec);
+  const ox = 90, oy = 190, pw = 800, ph = 660;
+  const lt = (t - sec.s) % 9;
+  const rnd = lt < 3 ? 1 : lt < 6 ? 2 : 3;
+  const stepU = lt < 3 ? ez(lt / 2.2) : lt < 6 ? ez((lt - 3) / 2.2) : ez((lt - 6) / 2.2);
+  let inner = card(ox, oy, pw, ph) + T("One cell, three friends", ox + pw / 2, oy + 62, 38, AINK, { w: 700, a: "middle" });
+  inner += rect(ox + 600, oy + 26, 160, 46, 23, "#D3E1FF") + T(`Round ${rnd}`, ox + 680, oy + 57, 24, "#4C7DFF", { w: 700, a: "middle" });
+  const pts = { A: [240, 400], D: [720, 430], F: [460, 680] };
+  const star = [473, 503];
+  const e0 = [250, 720], e1 = [lerp(e0[0], star[0], 0.5), lerp(e0[1], star[1], 0.5)];
+  const e2 = [lerp(e1[0], star[0], 0.5), lerp(e1[1], star[1], 0.5)];
+  const curE = rnd === 1 ? [lerp(e0[0], e1[0], stepU), lerp(e0[1], e1[1], stepU)]
+    : rnd === 2 ? [lerp(e1[0], e2[0], stepU), lerp(e1[1], e2[1], stepU)]
+    : [lerp(e2[0], star[0], stepU * 0.5), lerp(e2[1], star[1], stepU * 0.5)];
+  Object.values(pts).forEach(([px, py]) => {
+    inner += `<line x1="${f1(curE[0])}" y1="${f1(curE[1])}" x2="${px}" y2="${py}" stroke="#8FA3D9" stroke-width="6"/>`;
+  });
+  inner += `<line x1="${f1(curE[0])}" y1="${f1(curE[1])}" x2="${star[0]}" y2="${star[1]}" stroke="#FF5C93" stroke-width="5" stroke-dasharray="10 8"/>`;
+  inner += `<path d="${starP(star[0], star[1], 28, t * 2)}" fill="#FFD23F" stroke="#F2A900" stroke-width="4"/>`;
+  inner += T("★ average", star[0], star[1] - 36, 24, "#E07B00", { w: 700, a: "middle" });
+  Object.entries(pts).forEach(([k, [px, py]]) => {
+    inner += circ(px, py, 36, CELL_COL[k], 'stroke="#fff" stroke-width="5"') + T(k, px, py + 12, 34, "#fff", { w: 700, a: "middle" });
+  });
+  inner += circ(curE[0], curE[1], 40, CELL_COL.E, 'stroke="#fff" stroke-width="6"') + T("E", curE[0], curE[1] + 13, 36, "#fff", { w: 700, a: "middle" });
+  inner += T("Cell E steps halfway to ★ each round", ox + pw / 2, oy + ph - 32, 30, ASOFT, { w: 600, a: "middle" });
+  s += G(t, sec.s + .3, inner, ox + pw / 2, oy + ph / 2);
+
+  s += aBulletCards(t, [
+    "Imagine every wire is a **Hooke's law spring** pulling connected cells closer.",
+    "A cell's zero-force spot is the **★ average** (barycenter) of its neighbors.",
+    "Move **part-way** each round so all cells settle together smoothly.",
+    "Repeat across rounds until the dashed wire box stops shrinking."
+  ], [sec.s + .4, sec.s + 2.5, sec.s + 4.8, sec.s + 7.2], 940, 200, 890, 152, 18, 31);
+  return s;
+};
+
+ASCENES[2] = (t, sec) => {
+  let s = aHeader(t, sec);
+  const ox = 90, oy = 190, pw = 800, ph = 660;
+  const alpha = 0.1 + 0.8 * pp((t - sec.s) / 4.5);
+  let inner = card(ox, oy, pw, ph) + T("Damped spring update", ox + pw / 2, oy + 68, 38, "#9B5DFF", { w: 700, a: "middle" });
+  inner += rect(ox + 50, oy + 115, pw - 100, 86, 24, "#F4F7FE") +
+    T("new = (1 − α)·old + α·target", ox + pw / 2, oy + 170, 34, AINK, { w: 700, a: "middle", f: "IBM Plex Mono" });
+  const lx1 = ox + 130, lx2 = ox + pw - 130, ly = oy + 330;
+  inner += `<line x1="${lx1}" y1="${ly}" x2="${lx2}" y2="${ly}" stroke="#DCE5FA" stroke-width="12" stroke-linecap="round"/>`;
+  const nx = lerp(lx1, lx2, alpha);
+  inner += `<line x1="${lx1}" y1="${ly}" x2="${f1(nx)}" y2="${ly}" stroke="#4C7DFF" stroke-width="12" stroke-linecap="round"/>`;
+  inner += circ(lx1, ly, 22, "#6B7AA8", 'stroke="#fff" stroke-width="4"') + T("old", lx1, ly + 52, 26, ASOFT, { w: 700, a: "middle" });
+  inner += `<path d="${starP(lx2, ly, 26, t)}" fill="#FFD23F" stroke="#F2A900" stroke-width="4"/>` + T("★ target", lx2, ly + 52, 26, "#E07B00", { w: 700, a: "middle" });
+  inner += circ(nx, ly, 26, "#FF5C93", 'stroke="#fff" stroke-width="5"') + T("new", nx, ly - 38, 28, "#FF5C93", { w: 700, a: "middle" });
+  inner += T(`α = ${alpha.toFixed(2)}`, ox + pw / 2, oy + 495, 44, AINK, { w: 700, a: "middle", f: "IBM Plex Mono" });
+  inner += rect(lx1, oy + 530, lx2 - lx1, 18, 9, "#E8EEF9") + circ(nx, oy + 539, 20, "#9B5DFF", 'stroke="#fff" stroke-width="4"');
+  s += G(t, sec.s + .3, inner, ox + pw / 2, oy + ph / 2);
+
+  s += aBulletCards(t, [
+    "**α** (alpha) controls how far each cell jumps toward its target.",
+    "At **α = 0.50**, every cell steps halfway to its neighbor average.",
+    "Small **α** is cautious and smooth; huge **α** risks overshooting.",
+    "Keep corner **anchors** fixed so the chip stays spread across the die."
+  ], [sec.s + .5, sec.s + 2.8, sec.s + 5.2, sec.s + 7.6], 940, 200, 890, 152, 18, 31);
+  return s;
+};
+
+ASCENES[3] = (t, sec) => {
+  let s = aHeader(t, sec);
+  const L = [
+    [["INPUT", "#9B5DFF"], [": cells, wires, anchors, alpha = ", "#1F2A5A"], ["0.5", "#FF7A3D"]],
+    [["FOR", "#9B5DFF"], [" round = 1 ", "#1F2A5A"], ["TO", "#FF5C93"], [" max_rounds:", "#1F2A5A"]],
+    [["  ", "#1F2A5A"], ["FOR EACH", "#9B5DFF"], [" movable cell i:", "#1F2A5A"]],
+    [["    target[i] ", "#1F2A5A"], ["←", "#FF5C93"], [" avg(pos[j] for j in neighbors(i))", "#1F2A5A"]],
+    [["  ", "#1F2A5A"], ["FOR EACH", "#9B5DFF"], [" movable cell i:", "#1F2A5A"]],
+    [["    pos[i] ", "#1F2A5A"], ["←", "#FF5C93"], [" (1 - alpha)*pos[i] + alpha*target[i]", "#1F2A5A"]],
+    [["REPORT", "#9B5DFF"], [" HPWL(pos), min_spacing(pos)", "#1F2A5A"]]
+  ];
+  let inner = card(250, 205, 1420, 640) +
+    `<path d="M250 241 a36 36 0 0 1 36 -36 H1634 a36 36 0 0 1 36 36 V262 H250 Z" fill="#EAF1FF"/>` +
+    circ(292, 233, 9, "#FF5C93") + circ(322, 233, 9, "#FFB300") + circ(352, 233, 9, "#2BBF7E") +
+    T("force_directed.pseudo", 960, 242, 24, ASOFT, { a: "middle" });
+  const hi = [3, 5, 6][Math.floor((t - sec.s) / 2.5) % 3];
+  inner += rect(275, 345 + hi * 62 - 42, 1370, 56, 14, "#FFB300", 'opacity=".22"');
+  L.forEach((ln, i) => {
+    inner += `<text xml:space="preserve" x="310" y="${345 + i * 62}" font-family="IBM Plex Mono" font-weight="700" font-size="35">` +
+      ln.map(([tx, c]) => `<tspan fill="${c}">${esc(tx)}</tspan>`).join("") + `</text>`;
+  });
+  s += G(t, sec.s + .2, inner, 960, 525);
+  return s;
+};
+
+function aStepScene(n, val, pos, ghost, expl, bul, sec) {
+  let s = aHeader(t, sec);
+  s += hpwlMeter(t, sec.s + .2, val);
+  let b = card(90, 330, 840, 530) + T("chip 2.0 × 2.0 · 6 cells · 8 wires", 130, 386, 28, ASOFT, { w: 700 });
+  b += drawBoard(t, 280, 410, 390, pos, { ghost });
+  s += G(t, sec.s + .2, b, 510, 595);
+  s += stepBadge(t, n, sec.s + .3, sec.acc);
+  s += explainBox(t, expl, sec.s + .4, sec.acc);
+  s += chips3(t, bul, [sec.s + 1.2, sec.s + 2.4, sec.s + 3.6]);
+  return s;
+}
+ASCENES[4] = (t, sec) => aStepScene(1, 52.0, STAGES.P0, null,
+  "At **P0**, cells start far apart near the corners. The dashed orange **wire box** is huge, so total **HPWL = 52.0**.",
+  ["6 cells A–F connected by 8 wires", "Wide dashed orange wire box", "Starting HPWL = 52.0"], sec);
+ASCENES[5] = (t, sec) => aStepScene(2, 52.0, STAGES.P0, null,
+  "For every movable cell, compute the **barycenter ★** of its neighbors. Longer wires create stronger spring pulls toward the center.",
+  ["Barycenter = average of neighbor (x, y)", "Corner anchors A & C hold the frame", "Ready for damped step α"], sec);
+ASCENES[6] = (t, sec) => aStepScene(3, 26.8, STAGES.P1, STAGES.P0,
+  "Apply **new = (1 − α)·old + α·target** with **α = 0.50**. Dashed ghosts show P0; wires immediately shrink to **HPWL 26.8**.",
+  ["Each movable cell steps halfway", "Ghost rings show previous positions", "Wire box contracts smoothly"], sec);
+ASCENES[7] = (t, sec) => aStepScene(4, 14.0, STAGES.P3, STAGES.P1,
+  "After relaxation converges, the layout reaches **golden HPWL 14.0** — a 73% wirelength drop with safe spacing between cells!",
+  ["Golden HPWL = 14.0", "73% shorter total wirelength", "No cell pile-up"], sec);
+
+ASCENES[8] = (t, sec) => {
+  let s = aHeader(t, sec);
+  const u = pp((t - sec.s) / 4.2);
+  const alpha = lerp(0.08, 1.0, u);
+  const pos = u < 0.5 ? lerpStages(STAGES.P0, STAGES.P3, u * 2) : lerpStages(STAGES.P3, STAGES.PC, (u - 0.5) * 2);
+  const label = alpha < 0.25 ? "α too small: barely moves" : alpha < 0.72 ? "α ≈ 0.50: just right!" : "α = 1.00: collapse!";
+  const col = alpha < 0.25 ? "#FF9A00" : alpha < 0.72 ? "#2BBF7E" : "#FF5C93";
+
+  let dial = card(90, 190, 840, 120);
+  dial += T(`α dial = ${alpha.toFixed(2)}`, 126, 244, 32, AINK, { w: 700, f: "IBM Plex Mono" });
+  dial += T(label, 890, 244, 28, col, { w: 700, a: "end" });
+  dial += rect(126, 268, 764, 18, 9, "#E8EEF9") + circ(126 + 764 * u, 277, 18, col, 'stroke="#fff" stroke-width="4"');
+  s += G(t, sec.s + .2, dial, 510, 250);
+
+  let b = card(90, 330, 840, 530) + T("Morphing: start → compact → pile", 130, 386, 28, ASOFT, { w: 700 });
+  b += drawBoard(t, 280, 410, 390, pos);
+  s += G(t, sec.s + .2, b, 510, 595);
+
+  s += stepBadge(t, 5, sec.s + .3, sec.acc);
+  s += explainBox(t, "The **α dial** balances speed against stability. Too small wastes rounds; too large collapses cells into a pile.", sec.s + .4, sec.acc);
+  s += chips3(t, ["α ≈ 0.05 → cells barely move", "α ≈ 0.50 → fast, compact convergence", "α = 1.00 → illegal center collapse"], [sec.s + 1.2, sec.s + 2.4, sec.s + 3.6]);
+  return s;
+};
+
+function aTrackScene(t, sec, items, icons, cols) {
+  let s = aHeader(t, sec);
+  items.forEach((it, i) => {
+    const x = 90 + i * 600, y = 210, w = 540, h = 580, cx = x + w / 2;
+    let inner = card(x, y, w, h) +
+      `<path d="M${x} ${y + 36} a36 36 0 0 1 36 -36 H${x + w - 36} a36 36 0 0 1 36 36 V${y + 30} H${x} Z" fill="${cols[i]}"/>` +
+      circ(x + 60, y + 84, 40, cols[i], 'stroke="#fff" stroke-width="6"') +
+      T(String(i + 1), x + 60, y + 100, 46, "#fff", { w: 700, a: "middle" }) +
+      aIcon(icons[i], cx, y + 210, cols[i], t + i) +
+      TW(it, x + 40, y + 370, w - 80, 34, AINK, { acc: cols[i], lh: 46 });
+    s += G(t, sec.s + .3 + i * 1.4, inner, cx, y + h / 2);
+  });
+  return s;
+}
+ASCENES[9] = (t, sec) => aTrackScene(t, sec, [
+  "Open the **Browser tool** and load the 6-cell starter netlist.",
+  "Adjust the **α slider** and step relaxation rounds to shrink the wire box.",
+  "Keep corner **anchors** locked so HPWL reaches **14** without overlap."
+], ["browser", "play", "lock"], ["#00B8A9", "#4C7DFF", "#2BBF7E"]);
+
+ASCENES[10] = (t, sec) => aTrackScene(t, sec, [
+  "Write the **barycenter** and damped update loop in Python.",
+  "Run **force_directed_place.py** and verify coordinates match the goldens.",
+  "Check **HPWL = 14.0** and **min_spacing ≥ 0.25** before moving on."
+], ["code", "file", "check"], ["#9B5DFF", "#FF7A3D", "#2BBF7E"]);
+
+ASCENES[11] = (t, sec) => {
+  let s = aHeader(t, sec);
+  const cols = ["#FF9A00", "#FF5C93", "#4C7DFF"];
+  const tx = [
+    "**α too small:** cells barely move and waste iterations.",
+    "**α too big:** cells overshoot and collapse into a pile.",
+    "Always compare **HPWL** using the exact same net model."
+  ];
+  [0, 1, 2].forEach(i => {
+    const x = 90 + i * 600, y = 210, w = 540, h = 600, c0 = x + w / 2;
+    let inner = card(x, y, w, h) + `<path d="M${x} ${y + 36} a36 36 0 0 1 36 -36 H${x + w - 36} a36 36 0 0 1 36 36 V${y + 30} H${x} Z" fill="${cols[i]}"/>`;
+    inner += TW(tx[i], x + 36, y + 96, w - 72, 34, AINK, { w: 700, acc: cols[i], lh: 44 });
+    if (i === 0) inner += rect(x + 90, y + 320, 360, 90, 28, "#FFE9A8") + T("α = 0.02 → Δx ≈ 0", c0, y + 377, 32, "#B87400", { w: 700, a: "middle" });
+    if (i === 1) inner += circ(c0, y + 375, 58, "#FF5C93", 'opacity=".85"') + T("PILE-UP!", c0, y + 386, 28, "#fff", { w: 700, a: "middle" });
+    if (i === 2) {
+      inner += T("before: 52.0", x + 70, y + 310, 28, AINK, { w: 700 }) + rect(x + 70, y + 326, 400, 26, 13, "#FF5C93");
+      inner += T("after: 18.7", x + 70, y + 405, 28, "#2BBF7E", { w: 700 }) + rect(x + 70, y + 421, 144, 26, 13, "#2BBF7E");
+    }
+    s += G(t, sec.s + .4 + i * 1.4, inner, c0, y + h / 2);
+  });
+  return s;
+};
+
+ASCENES[12] = (t, sec) => {
+  let s = aHeader(t, sec);
+  const items = [
+    "Shrink HPWL toward **14** in the **Browser tool** without collapsing.",
+    "Solve all 3 real-life layout missions in the **Game** tab.",
+    "Score 6/6 on the **Force-directed check** quiz."
+  ];
+  const cols = ["#4C7DFF", "#2BBF7E", "#FF9A00"];
+  items.forEach((it, i) => {
+    const y = 220 + i * 165, t0 = sec.s + .4 + i * 1.3;
+    let inner = card(150, y, 1500, 135) + TC(it, 320, y + 68, 1280, 38, AINK, { acc: cols[i] });
+    inner += circ(235, y + 68, 46, "#fff", `stroke="${cols[i]}" stroke-width="8"`);
+    if (t > t0 + .4) {
+      inner += circ(235, y + 68, 46, cols[i]) + `<polyline points="212,${y + 68} 229,${y + 86} 260,${y + 48}" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+    s += G(t, t0, inner, 900, y + 68);
+  });
+  const t3 = sec.s + 4.8;
+  if (t >= t3) {
+    const k = eob((t - t3) / .6);
+    s += `<g transform="translate(960 835) scale(${f1(k * 100) / 100}) translate(-960 -835)">${T("Great job!", 960, 855, 116, "url(#ag1)", { w: 700, a: "middle" })}</g>`;
+    for (let i = 0; i < 65; i++) {
+      const d = t - t3, x = R(i) * 1920 + Math.sin(d * 2 + i) * 40, y = -30 + d * (240 + R(i + 200) * 300);
+      if (y < 1080) s += rect(x, y, 16, 12, 3, ABUB[i % 6]);
+    }
+  }
+  return s;
+};
+
+const lessonSvg = document.getElementById("lesson-svg");
+const animScrub = document.getElementById("anim-scrub");
+const animTime = document.getElementById("anim-time");
+const animPlayBtn = document.getElementById("anim-play");
+let animT = 1.8, animPlaying = false, animSpeed = 1.0, lastTs = null;
+
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function renderFrame(t) {
+  const idx = aSecIdx(t), sec = ASEC[idx], lt = t - sec.s;
+  const k = eo(lt / .45);
+  const body = `<g opacity="${f1(clamp(lt / .2) * 100) / 100}" transform="translate(${f1((1 - k) * 70)} 0)">${ASCENES[sec.sc](t, sec)}</g>`;
+  lessonSvg.innerHTML = ADEFS + aBg(t) + aProgress(t) + body + aMascot(t, sec);
+  animScrub.value = t.toFixed(1);
+  animTime.textContent = `${fmtTime(t)} / ${fmtTime(ADUR)}`;
+  document.querySelectorAll(".scene-pill").forEach((b, i) => b.classList.toggle("active", i === idx));
+}
+
+const scenePillsEl = document.getElementById("scene-pills");
+ASEC.forEach((sec, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "scene-pill";
+  b.textContent = `${i}. ${sec.label}`;
+  b.onclick = () => {
+    animT = sec.s + 0.8;
+    renderFrame(animT);
+  };
+  scenePillsEl.appendChild(b);
+});
+
+function tick(ts) {
+  if (animPlaying) {
+    if (lastTs !== null) {
+      animT += ((ts - lastTs) / 1000) * animSpeed;
+      if (animT >= ADUR) {
+        animT = ADUR;
+        animPlaying = false;
+        animPlayBtn.textContent = "▶ Play";
+      }
+      renderFrame(animT);
+    }
+    lastTs = ts;
+  } else {
+    lastTs = null;
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+animPlayBtn.onclick = () => {
+  if (animT >= ADUR - 0.2) animT = 0;
+  animPlaying = !animPlaying;
+  animPlayBtn.textContent = animPlaying ? "❚❚ Pause" : "▶ Play";
+};
+document.getElementById("anim-reset").onclick = () => {
+  animT = 0.5;
+  renderFrame(animT);
+};
+animScrub.oninput = () => {
+  animT = parseFloat(animScrub.value);
+  renderFrame(animT);
+};
+document.getElementById("anim-speed").onclick = e => {
+  animSpeed = animSpeed === 1.0 ? 1.5 : animSpeed === 1.5 ? 2.0 : 1.0;
+  e.target.textContent = animSpeed.toFixed(1) + "×";
+};
+
+// Language Switcher (updates UI text, quizzes, tools, and MP4 video source)
+document.querySelectorAll("[data-video-lang]").forEach(btn => {
+  btn.onclick = () => {
+    currentLang = btn.dataset.videoLang;
+    document.documentElement.lang = currentLang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-video-lang]").forEach(b =>
+      b.setAttribute("aria-selected", String(b.dataset.videoLang === currentLang))
+    );
+    applyI18n();
+    syncLessonVideo(currentLang);
+    refreshDone();
+    updateAlphaUI();
+    paintTool();
+    renderQuiz();
+    const activeWalk = document.querySelector(".walk-btn.is-on");
+    renderWalk(activeWalk ? +activeWalk.dataset.walk : 0);
+  };
+});
+
+renderFrame(animT);
+</script>
+</body>
+</html>
